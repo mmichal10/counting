@@ -13,7 +13,6 @@ struct tree_owner trees[SHARDS] = {};
 struct pthread_ctx {
 	uint32_t start_pos;
 	uint32_t end_pos;
-	uint32_t id;
 	int file_descryptor;
 };
 
@@ -26,28 +25,25 @@ void *sharded_counting(void *param) {
 	uint32_t file_position = 0;
 	int read_bytes;
 	int read_size;
-	uint32_t id;
 
-	//printf("Start %u, end %u\n", ctx->start_pos, ctx->end_pos);
+	printf("Start %u, end %u\n", ctx->start_pos, ctx->end_pos);
 	file_position = ctx->start_pos;
 
 	while (1) {
-		uint32_t arr[1024] = {};
+		uint32_t arr[4096] = {};
 		read_size = MIN(sizeof(arr), ctx->end_pos - file_position);
-
-		printf("Start %u, end %u file pos %u, read size %u, read bytes %u\n",
-			ctx->start_pos, ctx->end_pos, file_position, read_size, read_bytes);
 
 		read_bytes = pread(ctx->file_descryptor, arr, read_size, file_position);
 		if (read_bytes < 1)
 			break;
 
+		//printf("Start %u, end %u file pos %u, read size %u, read bytes %u\n",
+			//ctx->start_pos, ctx->end_pos, file_position, read_size, read_bytes);
+
 		file_position += read_bytes;
 		
 		count_numbers(arr, read_bytes/sizeof(uint32_t), trees);
 	}
-
-	printf("Exit thread %u\n", ctx->id);
 
 	return NULL;
 }
@@ -56,8 +52,8 @@ int main() {
 	int i;
 	int res;
 	char *inputfile_name = "random_numbers";
-	uint32_t tree_size_aggregate = 0;
-	uint32_t unique_elements_aggregate = 0;
+	uint32_t file_size;
+	uint32_t file_chunk_size;
 
 	pthread_t threads[THREAD_COUNT] = {};
 	struct pthread_ctx *thread_params[THREAD_COUNT] = {};
@@ -68,6 +64,12 @@ int main() {
 		return 1;
 	}
 
+ 	file_size = lseek(fd, 0L, SEEK_END);
+	printf("File size %u\n" ,file_size);
+	file_chunk_size = file_size / THREAD_COUNT;
+	file_chunk_size &= 0xffffff00;
+	printf("File chunk size %u\n" , file_chunk_size);
+
 	prepare_shards(trees, SHARDS, SHARD_SIZE);
 
 	assert(trees[SHARDS - 1].shard_range_max == MAX_INPUT);
@@ -77,10 +79,13 @@ int main() {
 		if (thread_params[i] == NULL)
 			goto end;
 
-		thread_params[i]->start_pos = i * 8192;
-		thread_params[i]->end_pos = (i+1) * 8192;
+		thread_params[i]->start_pos = i * file_chunk_size;
+		if (i == THREAD_COUNT - 1) 
+			thread_params[i]->end_pos = file_size;
+		else
+			thread_params[i]->end_pos = file_chunk_size * (i + 1);
+			
 		thread_params[i]->file_descryptor = fd;
-		thread_params[i]->id = i;
 
 		res = pthread_create(&threads[i], NULL, sharded_counting, thread_params[i]);
 		if (res != 0) {
@@ -92,7 +97,6 @@ end:
 
 	for (i = 0; i < THREAD_COUNT; i++) {
 		if (threads[i] != 0) {
-			printf("Joining %u\n", i);
 			res = pthread_join(threads[i], NULL);
 			assert(res == 0);
 		}
