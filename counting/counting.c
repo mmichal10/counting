@@ -7,7 +7,7 @@
 #include <pthread.h>
 #include "tree.h"
 
-#define SHARDS 16
+#define SHARDS 1024
 #define MAX_INPUT 0xffffffff
 #define SHARD_SIZE (MAX_INPUT / SHARDS)
 

@@ -26,11 +26,11 @@ void *sharded_counting(void *param) {
 	int read_bytes;
 	int read_size;
 
-	printf("Start %u, end %u\n", ctx->start_pos, ctx->end_pos);
+	//printf("Start %u, end %u\n", ctx->start_pos, ctx->end_pos);
 	file_position = ctx->start_pos;
 
 	while (1) {
-		uint32_t arr[4096] = {};
+		uint32_t arr[16384] = {};
 		read_size = MIN(sizeof(arr), ctx->end_pos - file_position);
 
 		read_bytes = pread(ctx->file_descryptor, arr, read_size, file_position);
@@ -48,7 +48,7 @@ void *sharded_counting(void *param) {
 	return NULL;
 }
 
-int main() {	
+int main(int argc, char *argv[]) {	
 	int i;
 	int res;
 	char *inputfile_name = "random_numbers";
@@ -58,17 +58,20 @@ int main() {
 	pthread_t threads[THREAD_COUNT] = {};
 	struct pthread_ctx *thread_params[THREAD_COUNT] = {};
 
-	int fd = open(inputfile_name, O_RDONLY);
+	if (argc != 2) {
+		printf("Usage: %s <path>\n", argv[0]);
+		return 1;
+	}
+
+	int fd = open(argv[1], O_RDONLY);
 	if (fd == 0) {
 		printf("Failed to open file\n");
 		return 1;
 	}
 
  	file_size = lseek(fd, 0L, SEEK_END);
-	printf("File size %u\n" ,file_size);
 	file_chunk_size = file_size / THREAD_COUNT;
 	file_chunk_size &= 0xffffff00;
-	printf("File chunk size %u\n" , file_chunk_size);
 
 	prepare_shards(trees, SHARDS, SHARD_SIZE);
 
