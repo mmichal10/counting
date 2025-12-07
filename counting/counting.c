@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <pthread.h>
+#include <stdatomic.h>
 
 #include "tree.h"
 #include "config.h"
@@ -20,7 +21,10 @@ struct tree_owner {
 	uint32_t shard_range_min;
 	uint32_t shard_range_max;
 
-	pthread_mutex_t lock;
+	pthread_rwlock_t lock;
+
+	//This might be an atomic or per-tree-node lock
+	pthread_rwlock_t visited_lock;
 };
 
 struct tree_owner *get_shard(struct tree_owner ctx[], uint32_t number) {
@@ -43,7 +47,8 @@ void prepare_shards(struct tree_owner ctx[], uint32_t shards_count, uint32_t sha
 		ctx[i].shard_range_min = shard_size * i;
 		ctx[i].shard_range_max = shard_size * (i+1) - 1;
 
-		assert(pthread_mutex_init(&ctx[i].lock, 0) == 0);
+		assert(pthread_rwlock_init(&ctx[i].lock, 0) == 0);
+		assert(pthread_rwlock_init(&ctx[i].visited_lock, 0) == 0);
 	}
 
 	ctx[shards_count - 1].shard_range_max = MAX_INPUT;
@@ -53,7 +58,8 @@ void destroy_shards(struct tree_owner ctx[], uint32_t shards_count, uint32_t sha
 	uint32_t i;
 
 	for (i = 0; i < shards_count; i++) {
-		assert(pthread_mutex_destroy(&ctx[i].lock) == 0);
+		assert(pthread_rwlock_destroy(&ctx[i].lock) == 0);
+		assert(pthread_rwlock_destroy(&ctx[i].visited_lock) == 0);
 	}
 
 }
@@ -69,28 +75,58 @@ int count_numbers(uint32_t *arr, int count, struct tree_owner ctx[]) {
 
 		shard = get_shard(ctx, arr[i]);
 
-		res = pthread_mutex_lock(&shard->lock);
+		res = pthread_rwlock_rdlock(&shard->lock);
 		assert(res == 0);
+
 		tmp = rb_tree_find(shard->root, arr[i]);
 
+		res = pthread_rwlock_unlock(&shard->lock);
+		assert(res == 0);
+
+		if (tmp != NULL) {
+			res = pthread_rwlock_rdlock(&shard->visited_lock);
+			assert(res == 0);
+
+			if (tmp->visited == 1) {
+				res = pthread_rwlock_unlock(&shard->visited_lock);
+				assert(res == 0);
+				continue;
+			}
+			res = pthread_rwlock_unlock(&shard->visited_lock);
+			assert(res == 0);
+
+			res = pthread_rwlock_wrlock(&shard->visited_lock);
+			assert(res == 0);
+
+			if (tmp->visited == 0) {
+				shard->repeated_elements++;
+				tmp->visited = 1;
+			}
+			res = pthread_rwlock_unlock(&shard->visited_lock);
+			assert(res == 0);
+			continue;
+		}
+
+		res = pthread_rwlock_wrlock(&shard->lock);
+		assert(res == 0);
+
+		tmp = rb_tree_find(shard->root, arr[i]);
 		if (tmp != NULL) {
 			if (tmp->visited == 0) {
 				shard->repeated_elements++;
 				tmp->visited = 1;
 			}
-			//printf("Repeated number %u\n", arr[i]);
-			res = pthread_mutex_unlock(&shard->lock);
+			res = pthread_rwlock_unlock(&shard->lock);
 			assert(res == 0);
 			continue;
 		}
-		//printf("Insert %u\n", arr[i]);
 		
 		tmp = rb_tree_insert_and_fix_violations(shard->root, arr[i]);
 		assert(tmp); // TODO proper error handling
 		shard->tree_size++;
 		shard->root = shard->root ? rb_tree_get_root(shard->root) : tmp;
 
-		res = pthread_mutex_unlock(&shard->lock);
+		res = pthread_rwlock_unlock(&shard->lock);
 		assert(res == 0);
 	}
 
