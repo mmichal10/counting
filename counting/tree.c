@@ -1,3 +1,5 @@
+#ifndef __TREE_C__
+#define __TREE_C__
 #include <stdint.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -6,14 +8,15 @@
 #define RB_TREE_COLOR_RED 5
 
 struct rb_tree_node {
-	int32_t val;
+	uint32_t val;
 	struct rb_tree_node *parent;
 	struct rb_tree_node *left;
 	struct rb_tree_node *right;
 	uint8_t color;
+	uint8_t visited;
 };
 
-struct rb_tree_node *rb_tree_alloc_node(int32_t val, struct rb_tree_node *parent) {
+struct rb_tree_node *rb_tree_alloc_node(uint32_t val, struct rb_tree_node *parent) {
 	struct rb_tree_node *ret = calloc(1, sizeof(struct rb_tree_node));
 	if (ret == NULL)
 		return NULL;
@@ -21,6 +24,7 @@ struct rb_tree_node *rb_tree_alloc_node(int32_t val, struct rb_tree_node *parent
 	ret->val = val;
 	ret->parent = parent;
 	ret->color = RB_TREE_COLOR_RED;
+	ret->visited = 0;
 
 	return ret;
 }
@@ -36,7 +40,7 @@ struct rb_tree_node *rb_tree_get_root(struct rb_tree_node *node) {
 		return node;
 }
 
-struct rb_tree_node *rb_tree_insert(struct rb_tree_node *node, int32_t val) {
+struct rb_tree_node *rb_tree_insert(struct rb_tree_node *node, uint32_t val) {
 
 	struct rb_tree_node *new_node;
 	
@@ -202,7 +206,7 @@ void rb_tree_fix_violations(struct rb_tree_node *node) {
 	}
 }
 
-struct rb_tree_node* rb_tree_insert_and_fix_violations(struct rb_tree_node *node, int32_t val) {
+struct rb_tree_node* rb_tree_insert_and_fix_violations(struct rb_tree_node *node, uint32_t val) {
 
 	struct rb_tree_node *new_node = rb_tree_insert(node, val);
 
@@ -214,7 +218,7 @@ struct rb_tree_node* rb_tree_insert_and_fix_violations(struct rb_tree_node *node
 	return new_node;
 }
 
-struct rb_tree_node *rb_tree_find(struct rb_tree_node *node, int32_t val) {
+struct rb_tree_node *rb_tree_find(struct rb_tree_node *node, uint32_t val) {
 	if (node == NULL)
 		return NULL;
 
@@ -227,3 +231,4 @@ struct rb_tree_node *rb_tree_find(struct rb_tree_node *node, int32_t val) {
 		return rb_tree_find(node->right, val);
 }
 
+#endif

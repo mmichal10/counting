@@ -47,11 +47,11 @@ CFLAGS += -g
 #CFLAGS += -Wno-misleading-indentation
 
 TARGET_BASE1=test1
-#TARGET_BASE2=test2
+TARGET_BASE2=test2
 TARGET1 = $(TARGET_BASE1)$(TARGET_EXTENSION)
-#TARGET2 = $(TARGET_BASE2)$(TARGET_EXTENSION)
-SRC_FILES1=$(UNITY_ROOT)/src/unity.c test_rb_tree.c #test/test_runners/TestProductionCode_Runner.c
-#SRC_FILES2=$(UNITY_ROOT)/src/unity.c src/ProductionCode2.c test/TestProductionCode2.c test/test_runners/TestProductionCode2_Runner.c
+TARGET2 = $(TARGET_BASE2)$(TARGET_EXTENSION)
+SRC_FILES1=$(UNITY_ROOT)/src/unity.c test_rb_tree.c
+SRC_FILES2=$(UNITY_ROOT)/src/unity.c test_counting.c 
 INC_DIRS=-I$(PROJECT_SRC) -I$(UNITY_ROOT)/src
 SYMBOLS=
 
@@ -59,9 +59,9 @@ all: clean default
 
 default: $(SRC_FILES1) $(SRC_FILES2)
 	$(C_COMPILER) $(CFLAGS) $(INC_DIRS) $(SYMBOLS) $(SRC_FILES1) -o $(TARGET1)
-	#$(C_COMPILER) $(CFLAGS) $(INC_DIRS) $(SYMBOLS) $(SRC_FILES2) -o $(TARGET2)
+	$(C_COMPILER) $(CFLAGS) $(INC_DIRS) $(SYMBOLS) $(SRC_FILES2) -o $(TARGET2)
 	- ./$(TARGET1)
-	#- ./$(TARGET2)
+	- ./$(TARGET2)
 
 #test/test_runners/TestProductionCode_Runner.c: test/TestProductionCode.c
 #	ruby $(UNITY_ROOT)/auto/generate_test_runner.rb test/TestProductionCode.c  test/test_runners/TestProductionCode_Runner.c
