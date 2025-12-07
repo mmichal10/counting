@@ -5,9 +5,10 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <pthread.h>
-#include "tree.h"
 
-#define SHARDS 1024
+#include "tree.h"
+#include "config.h"
+
 #define MAX_INPUT 0xffffffff
 #define SHARD_SIZE (MAX_INPUT / SHARDS)
 

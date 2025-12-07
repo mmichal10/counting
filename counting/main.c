@@ -7,6 +7,7 @@
 
 #include "tree.h"
 #include "counting.h"
+#include "config.h"
 
 struct tree_owner trees[SHARDS] = {};
 
@@ -17,8 +18,6 @@ struct pthread_ctx {
 };
 
 #define MIN(__A, __B) (__A < __B ? __A : __B)
-
-#define THREAD_COUNT 8
 
 void *sharded_counting(void *param) {
 	struct pthread_ctx *ctx = param;
