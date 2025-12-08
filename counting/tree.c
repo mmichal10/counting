@@ -29,6 +29,23 @@ struct rb_tree_node *rb_tree_alloc_node(uint32_t val, struct rb_tree_node *paren
 	return ret;
 }
 
+void rb_tree_deinit(struct rb_tree_node *root) {
+	if (root == NULL)
+		return;
+
+	if (root->left != NULL) {
+		rb_tree_deinit(root->left);
+		root->left = NULL;
+	} 
+
+	if (root->right != NULL) {
+		rb_tree_deinit(root->right);
+		root->right = NULL;
+	}
+
+	free(root);
+}
+
 struct rb_tree_node *rb_tree_get_root(struct rb_tree_node *node) {
 
 		if (node == NULL)

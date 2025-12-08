@@ -24,12 +24,12 @@ void *sharded_counting(void *param) {
 	uint32_t file_position = 0;
 	int read_bytes;
 	int read_size;
+	uint32_t arr[16384] = {};
 
 	//printf("Start %u, end %u\n", ctx->start_pos, ctx->end_pos);
 	file_position = ctx->start_pos;
 
 	while (1) {
-		uint32_t arr[16384] = {};
 		read_size = MIN(sizeof(arr), ctx->end_pos - file_position);
 
 		read_bytes = pread(ctx->file_descryptor, arr, read_size, file_position);

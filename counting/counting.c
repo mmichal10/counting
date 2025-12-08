@@ -60,6 +60,9 @@ void destroy_shards(struct tree_owner ctx[], uint32_t shards_count, uint32_t sha
 	for (i = 0; i < shards_count; i++) {
 		assert(pthread_rwlock_destroy(&ctx[i].lock) == 0);
 		assert(pthread_rwlock_destroy(&ctx[i].visited_lock) == 0);
+
+		
+		rb_tree_deinit(ctx[i].root);
 	}
 
 }
