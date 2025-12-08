@@ -8,7 +8,9 @@
 #define RB_TREE_COLOR_RED 5
 
 struct rb_tree_node {
-	uint32_t val;
+	uint32_t range_min;
+	uint32_t range_max;
+
 	struct rb_tree_node *parent;
 	struct rb_tree_node *left;
 	struct rb_tree_node *right;
@@ -21,7 +23,8 @@ struct rb_tree_node *rb_tree_alloc_node(uint32_t val, struct rb_tree_node *paren
 	if (ret == NULL)
 		return NULL;
 
-	ret->val = val;
+	ret->range_min = val;
+	ret->range_max = val;
 	ret->parent = parent;
 	ret->color = RB_TREE_COLOR_RED;
 	ret->visited = 0;
@@ -65,19 +68,21 @@ struct rb_tree_node *rb_tree_insert(struct rb_tree_node *node, uint32_t val) {
 	if (node == NULL) // TODO Is there unlikely() in the userpsace?
 		return rb_tree_alloc_node(val, NULL);
 
-	if (node->val > val && node->left != NULL)
+	if (node->range_min > val && node->left != NULL)
 		return rb_tree_insert(node->left, val);
-	else if (node->val < val && node->right != NULL)
+	else if (node->range_max < val && node->right != NULL)
 		return rb_tree_insert(node->right, val);
 
 	new_node = rb_tree_alloc_node(val, node);
 	if (new_node == NULL)
 		return NULL;
 
-	if (node->val > val)
+	if (node->range_min > val)
 		node->left = new_node;
-	else
+	else if (node->range_min < val)
 		node->right = new_node;
+	else
+		assert(0);
 
 	return new_node;
 }
@@ -239,13 +244,15 @@ struct rb_tree_node *rb_tree_find(struct rb_tree_node *node, uint32_t val) {
 	if (node == NULL)
 		return NULL;
 
-	if (node->val == val)
+	if (val >= node->range_min && val <= node->range_max)
 		return node;
 
-	if (node->val > val)
+	if (val < node->range_min)
 		return rb_tree_find(node->left, val);
-	else
+	else if (val > node->range_max)
 		return rb_tree_find(node->right, val);
+	else
+		assert(0);
 }
 
 #endif

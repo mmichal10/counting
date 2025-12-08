@@ -17,15 +17,20 @@ void test_find_1(void)
 void test_find_2(void)
 {
 	struct rb_tree_node n1 = {};
-	n1.val = 1;
+	n1.range_min = 1;
+	n1.range_max = 1;
 	struct rb_tree_node n2 = {};;
-	n2.val = 2;
+	n2.range_min = 2;
+	n2.range_max = 2;
 	struct rb_tree_node root = {};
-	root.val = 3;
+	root.range_min = 3;
+	root.range_max = 3;
 	struct rb_tree_node n4 = {};
-	n4.val = 4;
+	n4.range_min = 4;
+	n4.range_max = 4;
 	struct rb_tree_node n5 = {};
-	n5.val = 5;
+	n5.range_min = 5;
+	n5.range_max = 5;
 
 	root.left = &n2;
 	root.right = &n4;
@@ -43,15 +48,20 @@ void test_find_2(void)
 void test_find_3(void)
 {
 	struct rb_tree_node n1 = {};
-	n1.val = 1;
+	n1.range_min = 1;
+	n1.range_max = 1;
 	struct rb_tree_node n2 = {};;
-	n2.val = 2;
+	n2.range_min = 2;
+	n2.range_max = 2;
 	struct rb_tree_node root = {};
-	root.val = 3;
+	root.range_min = 3;
+	root.range_max = 3;
 	struct rb_tree_node n4 = {};
-	n4.val = 4;
+	n4.range_min = 4;
+	n4.range_max = 4;
 	struct rb_tree_node n5 = {};
-	n5.val = 5;
+	n5.range_min = 5;
+	n5.range_max = 5;
 
 	root.left = &n2;
 	root.right = &n4;
@@ -92,13 +102,13 @@ void test_rotation_left_1(void)
 	struct rb_tree_node dummy = {};
 
 	struct rb_tree_node n5 = {};
-	n5.val = 5;
+	n5.range_min = 5;
 	struct rb_tree_node n7 = {};;
-	n7.val = 7;
+	n7.range_min = 7;
 	struct rb_tree_node n9 = {};
-	n9.val = 9;
+	n9.range_min = 9;
 	struct rb_tree_node n11 = {};
-	n11.val = 11;
+	n11.range_min = 11;
 
 	dummy.left = &n5;
 
@@ -165,13 +175,13 @@ After Right Rotation:
 	struct rb_tree_node dummy = {};
 
 	struct rb_tree_node n5 = {};
-	n5.val = 5;
+	n5.range_min = 5;
 	struct rb_tree_node n7 = {};;
-	n7.val = 7;
+	n7.range_min = 7;
 	struct rb_tree_node n9 = {};
-	n9.val = 9;
+	n9.range_min = 9;
 	struct rb_tree_node n11 = {};
-	n11.val = 11;
+	n11.range_min = 11;
 
 	dummy.left = &n11;
 
@@ -225,13 +235,13 @@ void test_insert_1(void)
 
 */
 	struct rb_tree_node n5 = {};
-	n5.val = 5;
+	n5.range_min = 5;
 	struct rb_tree_node n7 = {};;
-	n7.val = 7;
+	n7.range_min = 7;
 	struct rb_tree_node n9 = {};
-	n9.val = 9;
+	n9.range_min = 9;
 	struct rb_tree_node n11 = {};
-	n11.val = 11;
+	n11.range_min = 11;
 
 	n11.left = &n7;
 
@@ -240,13 +250,13 @@ void test_insert_1(void)
 
 	struct rb_tree_node *node12 = rb_tree_insert(&n11, 12);
 	TEST_ASSERT_NOT_NULL(node12);
-	TEST_ASSERT_EQUAL(n11.right->val, 12);
+	TEST_ASSERT_EQUAL(n11.right->range_min, 12);
 	TEST_ASSERT_EQUAL_PTR(node12->parent, &n11);
 
 
 	struct rb_tree_node *node6 = rb_tree_insert(&n11, 6);
 	TEST_ASSERT_NOT_NULL(node6);
-	TEST_ASSERT_EQUAL(n5.right->val, 6);
+	TEST_ASSERT_EQUAL(n5.right->range_min, 6);
 	TEST_ASSERT_EQUAL_PTR(node6->parent, &n5);
 
 	free(node12);
@@ -257,7 +267,7 @@ void test_alloc_1(void)
 {
 	struct rb_tree_node *root = rb_tree_insert(NULL, 12);
 	TEST_ASSERT_NOT_NULL(root);
-	TEST_ASSERT_EQUAL(root->val, 12);
+	TEST_ASSERT_EQUAL(root->range_min, 12);
 	TEST_ASSERT_NULL(root->parent);
 
 	struct rb_tree_node *child = rb_tree_insert(root, 15);
