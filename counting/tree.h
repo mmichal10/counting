@@ -15,3 +15,5 @@ struct rb_tree_node *rb_tree_find(struct rb_tree_node *node, uint32_t val);
 
 void rb_tree_rotate_left(struct rb_tree_node *x);
 void rb_tree_rotate_right(struct rb_tree_node *x);
+
+void rb_tree_deinit(struct rb_tree_node *root);
