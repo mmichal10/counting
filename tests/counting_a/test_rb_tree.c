@@ -1008,6 +1008,273 @@ void test_delete_node_with_two_children(void)
 	TEST_ASSERT_NULL(root->parent);
 }
 
+void test_delete_black_root_with_two_black_children(void)
+{
+	struct rb_tree_node *root = rb_tree_insert_and_fix_violations(NULL, 20);
+	TEST_ASSERT_NOT_NULL(root);
+	root = rb_tree_get_root(root);
+
+	const uint32_t values[] = {10, 30, 5, 15, 25, 35};
+	int count = sizeof(values) / sizeof(values[0]);
+	int i;
+
+	for (i = 0; i < count; i++) {
+		struct rb_tree_node *node = rb_tree_insert_and_fix_violations(root, values[i]);
+		TEST_ASSERT_NOT_NULL(node);
+		root = rb_tree_get_root(node);
+	}
+
+	struct rb_tree_node *node20 = rb_tree_find(root, 20);
+	struct rb_tree_node *node10 = rb_tree_find(root, 10);
+	struct rb_tree_node *node30 = rb_tree_find(root, 30);
+	struct rb_tree_node *node5 = rb_tree_find(root, 5);
+	struct rb_tree_node *node15 = rb_tree_find(root, 15);
+	struct rb_tree_node *node25 = rb_tree_find(root, 25);
+	struct rb_tree_node *node35 = rb_tree_find(root, 35);
+
+	TEST_ASSERT_NOT_NULL(node20);
+	TEST_ASSERT_NOT_NULL(node10);
+	TEST_ASSERT_NOT_NULL(node30);
+	TEST_ASSERT_NOT_NULL(node5);
+	TEST_ASSERT_NOT_NULL(node15);
+	TEST_ASSERT_NOT_NULL(node25);
+	TEST_ASSERT_NOT_NULL(node35);
+
+	TEST_ASSERT_EQUAL_PTR(root, node20);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, node20->color);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, node10->color);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, node30->color);
+
+	root = rb_tree_delete(root, 20);
+	TEST_ASSERT_NOT_NULL(root);
+	root = rb_tree_get_root(root);
+
+	TEST_ASSERT_NULL(rb_tree_find(root, 20));
+
+	node25 = rb_tree_find(root, 25);
+	node10 = rb_tree_find(root, 10);
+	node30 = rb_tree_find(root, 30);
+	node5 = rb_tree_find(root, 5);
+	node15 = rb_tree_find(root, 15);
+	node35 = rb_tree_find(root, 35);
+
+	TEST_ASSERT_NOT_NULL(node25);
+	TEST_ASSERT_NOT_NULL(node10);
+	TEST_ASSERT_NOT_NULL(node30);
+	TEST_ASSERT_NOT_NULL(node5);
+	TEST_ASSERT_NOT_NULL(node15);
+	TEST_ASSERT_NOT_NULL(node35);
+
+	TEST_ASSERT_EQUAL_PTR(root, node25);
+	TEST_ASSERT_NULL(root->parent);
+
+	TEST_ASSERT_EQUAL_PTR(root->left, node10);
+	TEST_ASSERT_EQUAL_PTR(node10->parent, root);
+
+	TEST_ASSERT_EQUAL_PTR(root->right, node30);
+	TEST_ASSERT_EQUAL_PTR(node30->parent, root);
+
+	TEST_ASSERT_EQUAL_PTR(node10->left, node5);
+	TEST_ASSERT_EQUAL_PTR(node10->right, node15);
+	TEST_ASSERT_EQUAL_PTR(node5->parent, node10);
+	TEST_ASSERT_EQUAL_PTR(node15->parent, node10);
+	TEST_ASSERT_NULL(node5->left);
+	TEST_ASSERT_NULL(node5->right);
+	TEST_ASSERT_NULL(node15->left);
+	TEST_ASSERT_NULL(node15->right);
+
+	TEST_ASSERT_NULL(node30->left);
+	TEST_ASSERT_EQUAL_PTR(node30->right, node35);
+	TEST_ASSERT_EQUAL_PTR(node35->parent, node30);
+	TEST_ASSERT_NULL(node35->left);
+	TEST_ASSERT_NULL(node35->right);
+
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, root->color);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, node10->color);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, node30->color);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_RED, node5->color);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_RED, node15->color);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_RED, node35->color);
+
+	rb_tree_deinit(root);
+}
+
+void test_delete_black_node_with_red_successor(void)
+{
+	struct rb_tree_node *root = rb_tree_insert_and_fix_violations(NULL, 20);
+	TEST_ASSERT_NOT_NULL(root);
+	root = rb_tree_get_root(root);
+
+	const uint32_t values[] = {10, 30, 25, 27, 35};
+	int count = sizeof(values) / sizeof(values[0]);
+	int i;
+
+	for (i = 0; i < count; i++) {
+		struct rb_tree_node *node = rb_tree_insert_and_fix_violations(root, values[i]);
+		TEST_ASSERT_NOT_NULL(node);
+		root = rb_tree_get_root(node);
+	}
+
+	struct rb_tree_node *node20 = rb_tree_find(root, 20);
+	struct rb_tree_node *node10 = rb_tree_find(root, 10);
+	struct rb_tree_node *node30 = rb_tree_find(root, 30);
+	struct rb_tree_node *node25 = rb_tree_find(root, 25);
+	struct rb_tree_node *node27 = rb_tree_find(root, 27);
+	struct rb_tree_node *node35 = rb_tree_find(root, 35);
+
+	TEST_ASSERT_NOT_NULL(node20);
+	TEST_ASSERT_NOT_NULL(node10);
+	TEST_ASSERT_NOT_NULL(node30);
+	TEST_ASSERT_NOT_NULL(node25);
+	TEST_ASSERT_NOT_NULL(node27);
+	TEST_ASSERT_NOT_NULL(node35);
+
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, node30->color);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_RED, node35->color);
+
+	root = rb_tree_delete(root, 30);
+	TEST_ASSERT_NOT_NULL(root);
+	root = rb_tree_get_root(root);
+
+	TEST_ASSERT_NULL(rb_tree_find(root, 30));
+
+	node20 = rb_tree_find(root, 20);
+	node10 = rb_tree_find(root, 10);
+	node25 = rb_tree_find(root, 25);
+	node27 = rb_tree_find(root, 27);
+	node35 = rb_tree_find(root, 35);
+
+	TEST_ASSERT_NOT_NULL(node20);
+	TEST_ASSERT_NOT_NULL(node10);
+	TEST_ASSERT_NOT_NULL(node25);
+	TEST_ASSERT_NOT_NULL(node27);
+	TEST_ASSERT_NOT_NULL(node35);
+
+	TEST_ASSERT_EQUAL_PTR(root, node20);
+	TEST_ASSERT_NULL(root->parent);
+
+	TEST_ASSERT_EQUAL_PTR(node20->left, node10);
+	TEST_ASSERT_EQUAL_PTR(node10->parent, node20);
+	TEST_ASSERT_NULL(node10->left);
+	TEST_ASSERT_NULL(node10->right);
+
+	TEST_ASSERT_EQUAL_PTR(node20->right, node27);
+	TEST_ASSERT_EQUAL_PTR(node27->parent, node20);
+
+	TEST_ASSERT_EQUAL_PTR(node27->left, node25);
+	TEST_ASSERT_EQUAL_PTR(node27->right, node35);
+	TEST_ASSERT_EQUAL_PTR(node25->parent, node27);
+	TEST_ASSERT_EQUAL_PTR(node35->parent, node27);
+	TEST_ASSERT_NULL(node25->left);
+	TEST_ASSERT_NULL(node25->right);
+	TEST_ASSERT_NULL(node35->left);
+	TEST_ASSERT_NULL(node35->right);
+
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, node20->color);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, node10->color);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_RED, node27->color);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, node25->color);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, node35->color);
+
+	rb_tree_deinit(root);
+}
+
+void test_delete_black_leaf_with_far_red_nephew(void)
+{
+	struct rb_tree_node *root = rb_tree_insert_and_fix_violations(NULL, 30);
+	TEST_ASSERT_NOT_NULL(root);
+	root = rb_tree_get_root(root);
+
+	const uint32_t values[] = {15, 45, 10, 20, 40, 50, 60};
+	int count = sizeof(values) / sizeof(values[0]);
+	int i;
+
+	for (i = 0; i < count; i++) {
+		struct rb_tree_node *node = rb_tree_insert_and_fix_violations(root, values[i]);
+		TEST_ASSERT_NOT_NULL(node);
+		root = rb_tree_get_root(node);
+	}
+
+	struct rb_tree_node *node30 = rb_tree_find(root, 30);
+	struct rb_tree_node *node15 = rb_tree_find(root, 15);
+	struct rb_tree_node *node45 = rb_tree_find(root, 45);
+	struct rb_tree_node *node40 = rb_tree_find(root, 40);
+	struct rb_tree_node *node50 = rb_tree_find(root, 50);
+	struct rb_tree_node *node60 = rb_tree_find(root, 60);
+	struct rb_tree_node *node10 = rb_tree_find(root, 10);
+	struct rb_tree_node *node20 = rb_tree_find(root, 20);
+
+	TEST_ASSERT_NOT_NULL(node30);
+	TEST_ASSERT_NOT_NULL(node15);
+	TEST_ASSERT_NOT_NULL(node45);
+	TEST_ASSERT_NOT_NULL(node40);
+	TEST_ASSERT_NOT_NULL(node50);
+	TEST_ASSERT_NOT_NULL(node60);
+	TEST_ASSERT_NOT_NULL(node10);
+	TEST_ASSERT_NOT_NULL(node20);
+
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, node40->color);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, node50->color);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_RED, node60->color);
+
+	root = rb_tree_delete(root, 40);
+	TEST_ASSERT_NOT_NULL(root);
+	root = rb_tree_get_root(root);
+
+	TEST_ASSERT_NULL(rb_tree_find(root, 40));
+
+	node30 = rb_tree_find(root, 30);
+	node15 = rb_tree_find(root, 15);
+	node45 = rb_tree_find(root, 45);
+	node50 = rb_tree_find(root, 50);
+	node60 = rb_tree_find(root, 60);
+	node10 = rb_tree_find(root, 10);
+	node20 = rb_tree_find(root, 20);
+
+	TEST_ASSERT_NOT_NULL(node30);
+	TEST_ASSERT_NOT_NULL(node15);
+	TEST_ASSERT_NOT_NULL(node45);
+	TEST_ASSERT_NOT_NULL(node50);
+	TEST_ASSERT_NOT_NULL(node60);
+	TEST_ASSERT_NOT_NULL(node10);
+	TEST_ASSERT_NOT_NULL(node20);
+
+	TEST_ASSERT_EQUAL_PTR(root, node30);
+	TEST_ASSERT_NULL(root->parent);
+
+	TEST_ASSERT_EQUAL_PTR(root->left, node15);
+	TEST_ASSERT_EQUAL_PTR(node15->parent, root);
+	TEST_ASSERT_EQUAL_PTR(node15->left, node10);
+	TEST_ASSERT_EQUAL_PTR(node15->right, node20);
+	TEST_ASSERT_EQUAL_PTR(node10->parent, node15);
+	TEST_ASSERT_EQUAL_PTR(node20->parent, node15);
+	TEST_ASSERT_NULL(node10->left);
+	TEST_ASSERT_NULL(node10->right);
+	TEST_ASSERT_NULL(node20->left);
+	TEST_ASSERT_NULL(node20->right);
+
+	TEST_ASSERT_EQUAL_PTR(root->right, node50);
+	TEST_ASSERT_EQUAL_PTR(node50->parent, root);
+	TEST_ASSERT_EQUAL_PTR(node50->left, node45);
+	TEST_ASSERT_EQUAL_PTR(node50->right, node60);
+	TEST_ASSERT_EQUAL_PTR(node45->parent, node50);
+	TEST_ASSERT_EQUAL_PTR(node60->parent, node50);
+	TEST_ASSERT_NULL(node45->left);
+	TEST_ASSERT_NULL(node45->right);
+	TEST_ASSERT_NULL(node60->left);
+	TEST_ASSERT_NULL(node60->right);
+
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, node30->color);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, node15->color);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, node45->color);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, node60->color);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_RED, node50->color);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_RED, node10->color);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_RED, node20->color);
+
+	rb_tree_deinit(root);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_find_1);
@@ -1031,6 +1298,9 @@ int main(void) {
     RUN_TEST(test_delete_red_leaf);
     RUN_TEST(test_delete_black_node_with_single_red_child);
     RUN_TEST(test_delete_node_with_two_children);
+    RUN_TEST(test_delete_black_root_with_two_black_children);
+    RUN_TEST(test_delete_black_node_with_red_successor);
+    RUN_TEST(test_delete_black_leaf_with_far_red_nephew);
 
     return UNITY_END();
 }
