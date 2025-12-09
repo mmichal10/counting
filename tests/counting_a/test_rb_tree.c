@@ -103,12 +103,16 @@ void test_rotation_left_1(void)
 
 	struct rb_tree_node n5 = {};
 	n5.range_min = 5;
+	n5.range_max = 5;
 	struct rb_tree_node n7 = {};;
 	n7.range_min = 7;
+	n7.range_max = 7;
 	struct rb_tree_node n9 = {};
 	n9.range_min = 9;
+	n9.range_max = 9;
 	struct rb_tree_node n11 = {};
 	n11.range_min = 11;
+	n11.range_max = 11;
 
 	dummy.left = &n5;
 
