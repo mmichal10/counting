@@ -1,5 +1,139 @@
 #include "tree.c"
 #include "unity.h"
+#include <stdint.h>
+#include <stddef.h>
+#include <stdlib.h>
+
+static size_t count_nodes(struct rb_tree_node *node)
+{
+	if (node == NULL)
+		return 0;
+
+	return 1 + count_nodes(node->left) + count_nodes(node->right);
+}
+
+static void assert_parent_links(struct rb_tree_node *node)
+{
+	if (node == NULL)
+		return;
+
+	if (node->left != NULL) {
+		TEST_ASSERT_EQUAL_PTR(node, node->left->parent);
+		assert_parent_links(node->left);
+	}
+
+	if (node->right != NULL) {
+		TEST_ASSERT_EQUAL_PTR(node, node->right->parent);
+		assert_parent_links(node->right);
+	}
+}
+
+static void assert_bst_order_helper(struct rb_tree_node *node, uint32_t *previous, int *is_first)
+{
+	if (node == NULL)
+		return;
+
+	assert_bst_order_helper(node->left, previous, is_first);
+
+	if (!*is_first)
+		TEST_ASSERT_TRUE(*previous < node->range_min);
+
+	*previous = node->range_min;
+	*is_first = 0;
+
+	assert_bst_order_helper(node->right, previous, is_first);
+}
+
+static void assert_bst_order(struct rb_tree_node *root)
+{
+	uint32_t previous = 0;
+	int is_first = 1;
+
+	assert_bst_order_helper(root, &previous, &is_first);
+}
+
+static void assert_no_red_red(struct rb_tree_node *node)
+{
+	if (node == NULL)
+		return;
+
+	if (node->color == RB_TREE_COLOR_RED) {
+		if (node->left != NULL)
+			TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, node->left->color);
+		if (node->right != NULL)
+			TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, node->right->color);
+	}
+
+	assert_no_red_red(node->left);
+	assert_no_red_red(node->right);
+}
+
+static int compute_black_height(struct rb_tree_node *node)
+{
+	int left_height;
+	int right_height;
+	int self_black;
+
+	if (node == NULL)
+		return 1;
+
+	left_height = compute_black_height(node->left);
+	right_height = compute_black_height(node->right);
+
+	TEST_ASSERT_EQUAL(left_height, right_height);
+
+	self_black = (node->color == RB_TREE_COLOR_BLACK) ? 1 : 0;
+
+	return left_height + self_black;
+}
+
+static void assert_tree_properties(struct rb_tree_node *root)
+{
+	if (root == NULL)
+		return;
+
+	TEST_ASSERT_NULL(root->parent);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, root->color);
+
+	assert_parent_links(root);
+	assert_bst_order(root);
+	assert_no_red_red(root);
+	(void)compute_black_height(root);
+}
+
+static void collect_inorder(struct rb_tree_node *node, uint32_t *buffer, size_t *index)
+{
+	if (node == NULL)
+		return;
+
+	collect_inorder(node->left, buffer, index);
+	buffer[*index] = node->range_min;
+	(*index)++;
+	collect_inorder(node->right, buffer, index);
+}
+
+static void assert_tree_matches(struct rb_tree_node *root, const uint32_t *expected_values, size_t expected_count)
+{
+	size_t total = count_nodes(root);
+	TEST_ASSERT_EQUAL(expected_count, total);
+
+	if (expected_count == 0) {
+		TEST_ASSERT_NULL(root);
+		return;
+	}
+
+	uint32_t *buffer = malloc(sizeof(uint32_t) * expected_count);
+	TEST_ASSERT_NOT_NULL(buffer);
+
+	size_t idx = 0;
+	collect_inorder(root, buffer, &idx);
+	TEST_ASSERT_EQUAL(expected_count, idx);
+
+	for (size_t i = 0; i < expected_count; i++)
+		TEST_ASSERT_EQUAL_UINT32(expected_values[i], buffer[i]);
+
+	free(buffer);
+}
 
 void setUp(void)
 {
@@ -83,11 +217,11 @@ void test_rotation_left_1(void)
 
 	      dummy
 		 /
-		5                                              
-		 \                                             
-		  9                                                         
-		 / \                                                     
-		7   11                                                     
+		5
+		 \
+		  9
+		 / \
+		7   11
 
 	After Left Rotation:
 
@@ -1278,6 +1412,214 @@ void test_delete_black_leaf_with_far_red_nephew(void)
 	rb_tree_deinit(root);
 }
 
+void test_delete_root_with_deep_subtrees(void)
+{
+	uint32_t values[] = {40, 20, 60, 10, 30, 50, 70, 5, 15, 25, 35, 45, 55, 65, 75};
+	size_t value_count = sizeof(values) / sizeof(values[0]);
+	struct rb_tree_node *root = NULL;
+	size_t i;
+
+	for (i = 0; i < value_count; i++) {
+		struct rb_tree_node *node = rb_tree_insert_and_fix_violations(root, values[i]);
+		TEST_ASSERT_NOT_NULL(node);
+		root = rb_tree_get_root(node);
+	}
+
+	assert_tree_properties(root);
+
+	root = rb_tree_delete(root, 40);
+	TEST_ASSERT_NOT_NULL(root);
+	root = rb_tree_get_root(root);
+
+	uint32_t expected[] = {5, 10, 15, 20, 25, 30, 35, 45, 50, 55, 60, 65, 70, 75};
+	size_t expected_count = sizeof(expected) / sizeof(expected[0]);
+
+	assert_tree_properties(root);
+	assert_tree_matches(root, expected, expected_count);
+	TEST_ASSERT_NULL(rb_tree_find(root, 40));
+
+	struct rb_tree_node *successor = rb_tree_find(root, 45);
+	TEST_ASSERT_NOT_NULL(successor);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, successor->color);
+
+	rb_tree_deinit(root);
+}
+
+void test_delete_black_internal_node_with_red_sibling(void)
+{
+	uint32_t values[] = {30, 10, 50, 5, 20, 40, 60, 1, 7, 15, 25, 35, 45, 55, 65};
+	size_t value_count = sizeof(values) / sizeof(values[0]);
+	struct rb_tree_node *root = NULL;
+	size_t i;
+
+	for (i = 0; i < value_count; i++) {
+		struct rb_tree_node *node = rb_tree_insert_and_fix_violations(root, values[i]);
+		TEST_ASSERT_NOT_NULL(node);
+		root = rb_tree_get_root(node);
+	}
+
+	assert_tree_properties(root);
+
+	root = rb_tree_delete(root, 10);
+	TEST_ASSERT_NOT_NULL(root);
+	root = rb_tree_get_root(root);
+
+	uint32_t expected[] = {1, 5, 7, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65};
+	size_t expected_count = sizeof(expected) / sizeof(expected[0]);
+
+	assert_tree_properties(root);
+	assert_tree_matches(root, expected, expected_count);
+	TEST_ASSERT_NULL(rb_tree_find(root, 10));
+
+	struct rb_tree_node *parent = rb_tree_find(root, 30);
+	struct rb_tree_node *sibling = rb_tree_find(root, 50);
+	TEST_ASSERT_NOT_NULL(parent);
+	TEST_ASSERT_NOT_NULL(sibling);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, parent->color);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, sibling->color);
+
+	rb_tree_deinit(root);
+}
+
+void test_delete_black_node_with_cascading_double_black(void)
+{
+	uint32_t values[] = {25, 10, 40, 5, 15, 30, 45, 27, 35, 50, 60, 55, 65};
+	size_t value_count = sizeof(values) / sizeof(values[0]);
+	struct rb_tree_node *root = NULL;
+	size_t i;
+
+	for (i = 0; i < value_count; i++) {
+		struct rb_tree_node *node = rb_tree_insert_and_fix_violations(root, values[i]);
+		TEST_ASSERT_NOT_NULL(node);
+		root = rb_tree_get_root(node);
+	}
+
+	assert_tree_properties(root);
+
+	root = rb_tree_delete(root, 25);
+	TEST_ASSERT_NOT_NULL(root);
+	root = rb_tree_get_root(root);
+
+	uint32_t expected[] = {5, 10, 15, 27, 30, 35, 40, 45, 50, 55, 60, 65};
+	size_t expected_count = sizeof(expected) / sizeof(expected[0]);
+
+	assert_tree_properties(root);
+	assert_tree_matches(root, expected, expected_count);
+	TEST_ASSERT_NULL(rb_tree_find(root, 25));
+
+	struct rb_tree_node *replacement = rb_tree_find(root, 27);
+	TEST_ASSERT_NOT_NULL(replacement);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, replacement->color);
+
+	rb_tree_deinit(root);
+}
+
+void test_delete_black_node_requiring_dummy_leaf(void)
+{
+	uint32_t values[] = {20, 5, 30, 3, 7, 25, 35, 33};
+	size_t value_count = sizeof(values) / sizeof(values[0]);
+	struct rb_tree_node *root = NULL;
+	size_t i;
+
+	for (i = 0; i < value_count; i++) {
+		struct rb_tree_node *node = rb_tree_insert_and_fix_violations(root, values[i]);
+		TEST_ASSERT_NOT_NULL(node);
+		root = rb_tree_get_root(node);
+	}
+
+	assert_tree_properties(root);
+
+	root = rb_tree_delete(root, 25);
+	TEST_ASSERT_NOT_NULL(root);
+	root = rb_tree_get_root(root);
+
+	uint32_t expected[] = {3, 5, 7, 20, 30, 33, 35};
+	size_t expected_count = sizeof(expected) / sizeof(expected[0]);
+
+	assert_tree_properties(root);
+	assert_tree_matches(root, expected, expected_count);
+	TEST_ASSERT_NULL(rb_tree_find(root, 25));
+
+	struct rb_tree_node *node30 = rb_tree_find(root, 30);
+	TEST_ASSERT_NOT_NULL(node30);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, node30->color);
+
+	rb_tree_deinit(root);
+}
+
+void test_delete_black_leaf_with_far_red_nephew_full_fix(void)
+{
+	uint32_t values[] = {30, 15, 45, 10, 20, 40, 50, 60};
+	size_t value_count = sizeof(values) / sizeof(values[0]);
+	struct rb_tree_node *root = NULL;
+	size_t i;
+
+	for (i = 0; i < value_count; i++) {
+		struct rb_tree_node *node = rb_tree_insert_and_fix_violations(root, values[i]);
+		TEST_ASSERT_NOT_NULL(node);
+		root = rb_tree_get_root(node);
+	}
+
+	assert_tree_properties(root);
+
+	root = rb_tree_delete(root, 40);
+	TEST_ASSERT_NOT_NULL(root);
+	root = rb_tree_get_root(root);
+
+	uint32_t expected[] = {10, 15, 20, 30, 45, 50, 60};
+	size_t expected_count = sizeof(expected) / sizeof(expected[0]);
+
+	assert_tree_properties(root);
+	assert_tree_matches(root, expected, expected_count);
+	TEST_ASSERT_NULL(rb_tree_find(root, 40));
+
+	struct rb_tree_node *node50 = rb_tree_find(root, 50);
+	TEST_ASSERT_NOT_NULL(node50);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, node50->color);
+
+	rb_tree_deinit(root);
+}
+
+void test_sequential_deletions_triggering_rotations(void)
+{
+	uint32_t values[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+	size_t value_count = sizeof(values) / sizeof(values[0]);
+	struct rb_tree_node *root = NULL;
+	size_t i;
+
+	for (i = 0; i < value_count; i++) {
+		struct rb_tree_node *node = rb_tree_insert_and_fix_violations(root, values[i]);
+		TEST_ASSERT_NOT_NULL(node);
+		root = rb_tree_get_root(node);
+	}
+
+	assert_tree_properties(root);
+	assert_tree_matches(root, values, value_count);
+
+	struct {
+		uint32_t key;
+		uint32_t expected[10];
+		size_t expected_count;
+	} cases[] = {
+		{2, {1, 3, 4, 5, 6, 7, 8, 9, 10}, 9},
+		{8, {1, 3, 4, 5, 6, 7, 9, 10}, 8},
+		{4, {1, 3, 5, 6, 7, 9, 10}, 7},
+		{6, {1, 3, 5, 7, 9, 10}, 6},
+	};
+	size_t case_count = sizeof(cases) / sizeof(cases[0]);
+
+	for (i = 0; i < case_count; i++) {
+		root = rb_tree_delete(root, cases[i].key);
+		TEST_ASSERT_NOT_NULL(root);
+		root = rb_tree_get_root(root);
+		assert_tree_properties(root);
+		assert_tree_matches(root, cases[i].expected, cases[i].expected_count);
+		TEST_ASSERT_NULL(rb_tree_find(root, cases[i].key));
+	}
+
+	rb_tree_deinit(root);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_find_1);
@@ -1304,6 +1646,12 @@ int main(void) {
     RUN_TEST(test_delete_black_root_with_two_black_children);
     RUN_TEST(test_delete_black_node_with_red_successor);
     RUN_TEST(test_delete_black_leaf_with_far_red_nephew);
+    RUN_TEST(test_delete_root_with_deep_subtrees);
+    RUN_TEST(test_delete_black_internal_node_with_red_sibling);
+    RUN_TEST(test_delete_black_node_with_cascading_double_black);
+    RUN_TEST(test_delete_black_node_requiring_dummy_leaf);
+    RUN_TEST(test_delete_black_leaf_with_far_red_nephew_full_fix);
+    RUN_TEST(test_sequential_deletions_triggering_rotations);
 
     return UNITY_END();
 }
