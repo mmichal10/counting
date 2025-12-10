@@ -255,4 +255,251 @@ struct rb_tree_node *rb_tree_find(struct rb_tree_node *node, uint32_t val) {
 		assert(0);
 }
 
+/*
+static inline clear_pointers(struct rb_tree_node *node) {
+	if (node->parent != NULL && node == node->parent->left)
+		node->parent->left = NULL;
+	else if (node->parent != NULL && node == node->parent->right)
+		node->parent->right = NULL;
+	else
+		assert(node->parent == NULL);
+
+	if (node->left != NULL)
+		node->left->parent = NULL;
+
+	if (node->right != NULL)
+		node->right->parent = NULL;
+}
+*/
+
+static inline void clear_pointers(struct rb_tree_node *node) {
+	if (node == NULL)
+		return;
+	
+	node->parent = NULL;
+	node->left = NULL;
+	node->right = NULL;
+}
+
+static inline void replace_node(struct rb_tree_node *old_node, struct rb_tree_node *new_node) {
+	struct rb_tree_node *parent = NULL;
+	struct rb_tree_node *left_child = NULL;
+	struct rb_tree_node *right_child = NULL;
+
+	if (old_node != NULL) {
+		parent = old_node->parent;
+		left_child = old_node->left;
+		right_child = old_node->right;
+	}
+
+	if (parent != NULL && old_node == parent->left) {
+		parent->left = new_node;
+		if (new_node != NULL)
+			new_node->parent = parent;
+	} else if (parent != NULL && old_node == parent->right) {
+		parent->right = new_node;
+		if (new_node != NULL)
+			new_node->parent = parent;
+	} else {
+		assert(parent == NULL);
+	}
+
+	if (left_child != NULL && left_child != new_node) {
+		left_child->parent = new_node;
+		if (new_node != NULL)
+			new_node->left = left_child;
+	}
+
+	if (right_child != NULL && right_child != new_node) {
+		right_child->parent = new_node;
+		if (new_node != NULL)
+			new_node->right = right_child;
+	}
+}
+
+void rb_tree_dealloc_node(struct rb_tree_node *node) {
+	free(node);
+}
+
+static inline struct rb_tree_node* _get_root_somehow(struct rb_tree_node *parent,
+		struct rb_tree_node *child_1, struct rb_tree_node *child_2) {
+	if (parent != NULL)
+		return rb_tree_get_root(parent);
+	if (child_1 != NULL)
+		return rb_tree_get_root(child_2);
+	if (child_2 != NULL)
+		return rb_tree_get_root(child_1);
+
+	return NULL;
+}
+
+static inline struct rb_tree_node* _get_replacing_node(struct rb_tree_node *node) {
+	struct rb_tree_node *replacing_node;
+
+	if (node->right != NULL) {
+		replacing_node = node->right;
+
+		while (replacing_node->left != NULL)
+			replacing_node = replacing_node->left;
+	} else if (node->left != NULL) {
+		replacing_node = node->left;
+
+		while (replacing_node->right != NULL)
+			replacing_node = replacing_node->right;
+	} else {
+		replacing_node = NULL;
+	}
+
+	return replacing_node;
+}
+
+struct rb_tree_node *rb_tree_delete(struct rb_tree_node *root, uint32_t val) {
+	struct rb_tree_node *parent;
+	struct rb_tree_node *left_child;
+	struct rb_tree_node *right_child;
+	struct rb_tree_node *target_node;
+	struct rb_tree_node *replacing_node;
+	struct rb_tree_node *node_to_fix = NULL;
+	uint8_t target_node_color;
+
+	if (root == NULL)
+		return NULL;
+
+	target_node = rb_tree_find(root, val);
+	if (target_node == NULL)
+		return rb_tree_get_root(root);
+
+	parent = target_node->parent;
+	left_child = target_node->left;
+	right_child = target_node->right;
+	target_node_color = target_node->color;
+
+
+	if (left_child == NULL && right_child == NULL && target_node_color == RB_TREE_COLOR_RED) {
+		replace_node(target_node, NULL);
+
+		rb_tree_dealloc_node(target_node);
+
+		return rb_tree_get_root(parent);
+	}
+
+	replacing_node = _get_replacing_node(target_node);
+	if (replacing_node != NULL && replacing_node->left != NULL) {
+		node_to_fix = replacing_node->left;
+		replace_node(replacing_node, replacing_node->left);
+	} else if (replacing_node != NULL && replacing_node->right != NULL) {
+		node_to_fix = replacing_node->right;
+		replace_node(replacing_node, replacing_node->right);
+	} else {
+		replace_node(replacing_node, NULL);
+	}
+
+	if (target_node->color == RB_TREE_COLOR_RED) {
+		rb_tree_dealloc_node(target_node);
+
+		return rb_tree_get_root(parent);
+	}
+
+	if (replacing_node == NULL) {
+		node_to_fix = parent;
+	} else {
+		clear_pointers(replacing_node);
+		replacing_node->color = target_node->color;
+	}
+
+	replace_node(target_node, replacing_node);
+
+	rb_tree_dealloc_node(target_node);
+	
+	//if (node_to_fix == NULL)
+		//return _get_root_somehow(parent, left_child, right_child);
+
+	// Here comes the fixing
+
+	struct rb_tree_node *sybling;
+
+	while (node_to_fix != NULL && node_to_fix->parent != NULL && node_to_fix->color != RB_TREE_COLOR_BLACK) {
+		if (node_to_fix == node_to_fix->parent->left) {
+			sybling = node_to_fix->parent->right;
+			if (sybling != NULL && sybling->color == RB_TREE_COLOR_RED) {
+				sybling->color = RB_TREE_COLOR_BLACK;
+				node_to_fix->parent->color = RB_TREE_COLOR_RED;
+				rb_tree_rotate_left(node_to_fix);
+
+				// After the shift left node_to_fix has a new parent, so sybling changed as well
+				sybling = node_to_fix->parent->right;
+			}
+
+			if ((sybling->left == NULL || sybling->left->color == RB_TREE_COLOR_BLACK) &&
+				(sybling->right == NULL || sybling->right->color == RB_TREE_COLOR_BLACK)) {
+
+					sybling->color = RB_TREE_COLOR_RED;
+					node_to_fix = node_to_fix->parent;
+					continue;
+
+			} else {
+				if ((sybling->right == NULL || sybling->right->color == RB_TREE_COLOR_BLACK) &&
+						sybling->left != NULL) {
+					sybling->left->color = RB_TREE_COLOR_BLACK;
+					sybling->color = RB_TREE_COLOR_RED;
+					rb_tree_rotate_right(sybling);
+					sybling = node_to_fix->parent->right;
+				}
+				
+				sybling->color = node_to_fix->parent->color;
+				node_to_fix->parent->color = RB_TREE_COLOR_BLACK;
+				assert(sybling->right != NULL);
+				sybling->right->color = RB_TREE_COLOR_BLACK;
+				rb_tree_rotate_left(node_to_fix);
+				node_to_fix = rb_tree_get_root(node_to_fix);
+			}
+
+		} else if (node_to_fix == node_to_fix->parent->right) {
+
+			sybling = node_to_fix->parent->left;
+			if (sybling != NULL && sybling->color == RB_TREE_COLOR_RED) {
+				sybling->color = RB_TREE_COLOR_BLACK;
+				node_to_fix->parent->color = RB_TREE_COLOR_RED;
+				rb_tree_rotate_right(node_to_fix);
+
+				// After the shift right node_to_fix has a new parent, so sybling changed as well
+				sybling = node_to_fix->parent->left;
+			}
+
+			if ((sybling->right == NULL || sybling->right->color == RB_TREE_COLOR_BLACK) &&
+				(sybling->left == NULL || sybling->left->color == RB_TREE_COLOR_BLACK)) {
+
+					sybling->color = RB_TREE_COLOR_RED;
+					node_to_fix = node_to_fix->parent;
+					continue;
+
+			} else {
+				if ((sybling->left == NULL || sybling->left->color == RB_TREE_COLOR_BLACK) &&
+						sybling->right != NULL) {
+					sybling->right->color = RB_TREE_COLOR_BLACK;
+					sybling->color = RB_TREE_COLOR_RED;
+					rb_tree_rotate_left(sybling);
+					sybling = node_to_fix->parent->left;
+				}
+				
+				sybling->color = node_to_fix->parent->color;
+				node_to_fix->parent->color = RB_TREE_COLOR_BLACK;
+				assert(sybling->left != NULL);
+				sybling->left->color = RB_TREE_COLOR_BLACK;
+				rb_tree_rotate_right(node_to_fix);
+				node_to_fix = rb_tree_get_root(node_to_fix);
+			}
+
+			
+		} else {
+			assert(0);
+		}
+	}
+
+	return _get_root_somehow(node_to_fix, NULL, NULL);
+	
+
+	
+}
+
 #endif
