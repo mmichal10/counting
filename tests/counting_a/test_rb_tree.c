@@ -1021,6 +1021,36 @@ void test_insert_and_fix_11(void)
 	TEST_ASSERT_EQUAL(n6->color, RB_TREE_COLOR_RED);
 }
 
+void test_root_remains_black_after_deleting_black_leaf(void)
+{
+	uint32_t values[] = {0, 1, 2, 3, 4, 5};
+	size_t value_count = sizeof(values) / sizeof(values[0]);
+	struct rb_tree_node *root = NULL;
+	size_t i;
+
+	for (i = 0; i < value_count; i++) {
+		struct rb_tree_node *node = rb_tree_insert_and_fix_violations(root, values[i]);
+		TEST_ASSERT_NOT_NULL(node);
+		root = rb_tree_get_root(node);
+	}
+
+	assert_tree_properties(root);
+
+	root = rb_tree_delete(root, 0);
+	TEST_ASSERT_NOT_NULL(root);
+	root = rb_tree_get_root(root);
+	TEST_ASSERT_NOT_NULL(root);
+
+	uint32_t expected[] = {1, 2, 3, 4, 5};
+	size_t expected_count = sizeof(expected) / sizeof(expected[0]);
+
+	assert_tree_matches(root, expected, expected_count);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, root->color);
+
+	assert_tree_properties(root);
+	rb_tree_deinit(root);
+}
+
 void test_mixed_stress_insert_delete(void)
 {
 	const size_t max_key = 700;
@@ -1699,6 +1729,7 @@ int main(void) {
     RUN_TEST(test_insert_and_fix_9);
     RUN_TEST(test_insert_and_fix_10);
     RUN_TEST(test_insert_and_fix_11);
+    RUN_TEST(test_root_remains_black_after_deleting_black_leaf);
     RUN_TEST(test_delete_red_leaf);
     RUN_TEST(test_delete_black_node_with_single_red_child);
     RUN_TEST(test_delete_node_with_two_children);
