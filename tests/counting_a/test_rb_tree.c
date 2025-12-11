@@ -914,6 +914,127 @@ void test_insert_and_fix_11(void)
 	TEST_ASSERT_EQUAL(n6->color, RB_TREE_COLOR_RED);
 }
 
+void test_insert_within_single_range(void)
+{
+	uint32_t values[] = {10, 42, 63};
+	size_t value_count = sizeof(values) / sizeof(values[0]);
+	struct rb_tree_node *root = NULL;
+
+	for (size_t i = 0; i < value_count; i++) {
+		struct rb_tree_node *node = rb_tree_insert_and_fix_violations(root, values[i]);
+		TEST_ASSERT_NOT_NULL(node);
+		root = rb_tree_get_root(node);
+		TEST_ASSERT_NOT_NULL(root);
+		assert_tree_properties(root);
+	}
+
+	TEST_ASSERT_NULL(root->left);
+	TEST_ASSERT_NULL(root->right);
+
+	for (size_t i = 0; i < value_count; i++) {
+		struct rb_tree_node *found = rb_tree_find(root, values[i]);
+		TEST_ASSERT_NOT_NULL(found);
+	}
+
+	uint32_t expected_ranges[] = {
+		RB_TREE_GET_MIN_NODE_RANGE(values[0]),
+	};
+	assert_tree_matches(root, expected_ranges, sizeof(expected_ranges) / sizeof(expected_ranges[0]));
+
+	assert_tree_properties(root);
+	rb_tree_deinit(root);
+}
+
+void test_insert_cross_range_boundary(void)
+{
+	uint32_t values[] = {0, 64, 1, 127};
+	size_t value_count = sizeof(values) / sizeof(values[0]);
+	struct rb_tree_node *root = NULL;
+
+	for (size_t i = 0; i < value_count; i++) {
+		struct rb_tree_node *node = rb_tree_insert_and_fix_violations(root, values[i]);
+		TEST_ASSERT_NOT_NULL(node);
+		root = rb_tree_get_root(node);
+		TEST_ASSERT_NOT_NULL(root);
+		assert_tree_properties(root);
+	}
+
+	for (size_t i = 0; i < value_count; i++) {
+		struct rb_tree_node *found = rb_tree_find(root, values[i]);
+		TEST_ASSERT_NOT_NULL(found);
+	}
+
+	TEST_ASSERT_NULL(root->left);
+	TEST_ASSERT_NOT_NULL(root->right);
+	TEST_ASSERT_EQUAL_PTR(root, root->right->parent);
+
+	uint32_t expected_ranges[] = {
+		RB_TREE_GET_MIN_NODE_RANGE(values[0]),
+		RB_TREE_GET_MIN_NODE_RANGE(values[1]),
+	};
+	assert_tree_matches(root, expected_ranges, sizeof(expected_ranges) / sizeof(expected_ranges[0]));
+
+	assert_tree_properties(root);
+	rb_tree_deinit(root);
+}
+
+void test_insert_multiple_ranges_with_rebalancing(void)
+{
+	uint32_t values[] = {200, 40, 320, 41, 260, 258};
+	size_t value_count = sizeof(values) / sizeof(values[0]);
+	struct rb_tree_node *root = NULL;
+
+	for (size_t i = 0; i < value_count; i++) {
+		struct rb_tree_node *node = rb_tree_insert_and_fix_violations(root, values[i]);
+		TEST_ASSERT_NOT_NULL(node);
+		root = rb_tree_get_root(node);
+		TEST_ASSERT_NOT_NULL(root);
+		assert_tree_properties(root);
+	}
+
+	for (size_t i = 0; i < value_count; i++) {
+		struct rb_tree_node *found = rb_tree_find(root, values[i]);
+		TEST_ASSERT_NOT_NULL(found);
+	}
+
+	struct rb_tree_node *node40 = rb_tree_find(root, 40);
+	struct rb_tree_node *node200 = rb_tree_find(root, 200);
+	struct rb_tree_node *node260 = rb_tree_find(root, 260);
+	struct rb_tree_node *node320 = rb_tree_find(root, 320);
+
+	TEST_ASSERT_NOT_NULL(node40);
+	TEST_ASSERT_NOT_NULL(node200);
+	TEST_ASSERT_NOT_NULL(node260);
+	TEST_ASSERT_NOT_NULL(node320);
+
+	TEST_ASSERT_EQUAL_PTR(node200, root);
+	TEST_ASSERT_EQUAL_PTR(root->left, node40);
+	TEST_ASSERT_EQUAL_PTR(root->right, node320);
+	TEST_ASSERT_NULL(root->parent);
+
+	TEST_ASSERT_EQUAL_PTR(node40->parent, root);
+	TEST_ASSERT_NULL(node40->left);
+	TEST_ASSERT_NULL(node40->right);
+
+	TEST_ASSERT_EQUAL_PTR(node320->parent, root);
+	TEST_ASSERT_NOT_NULL(node320->left);
+	TEST_ASSERT_EQUAL_PTR(node320->left, node260);
+	TEST_ASSERT_NULL(node320->right);
+
+	TEST_ASSERT_EQUAL_PTR(node260->parent, node320);
+
+	uint32_t expected_ranges[] = {
+		RB_TREE_GET_MIN_NODE_RANGE(40),
+		RB_TREE_GET_MIN_NODE_RANGE(200),
+		RB_TREE_GET_MIN_NODE_RANGE(260),
+		RB_TREE_GET_MIN_NODE_RANGE(320),
+	};
+	assert_tree_matches(root, expected_ranges, sizeof(expected_ranges) / sizeof(expected_ranges[0]));
+
+	assert_tree_properties(root);
+	rb_tree_deinit(root);
+}
+
 void test_root_remains_black_after_deleting_black_leaf(void)
 {
 	uint32_t values[] = {0, 1, 2, 3, 4, 5};
@@ -1608,6 +1729,9 @@ int main(void) {
     RUN_TEST(test_rotation_left_1);
     RUN_TEST(test_rotation_right_1);
     RUN_TEST(test_alloc_1);
+    RUN_TEST(test_insert_within_single_range);
+    RUN_TEST(test_insert_cross_range_boundary);
+    RUN_TEST(test_insert_multiple_ranges_with_rebalancing);
     //RUN_TEST(test_insert_and_fix_1);
     //RUN_TEST(test_insert_and_fix_2);
     //RUN_TEST(test_insert_and_fix_3);
