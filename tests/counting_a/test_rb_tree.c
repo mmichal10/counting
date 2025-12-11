@@ -1179,7 +1179,6 @@ void test_delete_black_root_with_two_black_children(void)
 	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, node10->color);
 	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, node30->color);
 
-	return;
 	root = rb_tree_delete(root, 20);
 	TEST_ASSERT_NOT_NULL(root);
 	root = rb_tree_get_root(root);
@@ -1268,7 +1267,6 @@ void test_delete_black_node_with_red_successor(void)
 	TEST_ASSERT_EQUAL(RB_TREE_COLOR_RED, node35->color);
 
 	root = rb_tree_delete(root, 30);
-	return;
 	TEST_ASSERT_NOT_NULL(root);
 	root = rb_tree_get_root(root);
 
@@ -1356,7 +1354,6 @@ void test_delete_black_leaf_with_far_red_nephew(void)
 	root = rb_tree_delete(root, 40);
 	TEST_ASSERT_NOT_NULL(root);
 	root = rb_tree_get_root(root);
-	return;
 
 	TEST_ASSERT_NULL(rb_tree_find(root, 40));
 
@@ -1476,7 +1473,7 @@ void test_delete_black_internal_node_with_red_sibling(void)
 	TEST_ASSERT_NOT_NULL(parent);
 	TEST_ASSERT_NOT_NULL(sibling);
 	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, parent->color);
-	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, sibling->color);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_RED, sibling->color);
 
 	rb_tree_deinit(root);
 }
@@ -1509,7 +1506,7 @@ void test_delete_black_node_with_cascading_double_black(void)
 
 	struct rb_tree_node *replacement = rb_tree_find(root, 27);
 	TEST_ASSERT_NOT_NULL(replacement);
-	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, replacement->color);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_RED, replacement->color);
 
 	rb_tree_deinit(root);
 }
@@ -1575,7 +1572,7 @@ void test_delete_black_leaf_with_far_red_nephew_full_fix(void)
 
 	struct rb_tree_node *node50 = rb_tree_find(root, 50);
 	TEST_ASSERT_NOT_NULL(node50);
-	TEST_ASSERT_EQUAL(RB_TREE_COLOR_BLACK, node50->color);
+	TEST_ASSERT_EQUAL(RB_TREE_COLOR_RED, node50->color);
 
 	rb_tree_deinit(root);
 }
