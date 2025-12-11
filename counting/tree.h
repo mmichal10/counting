@@ -17,3 +17,5 @@ void rb_tree_rotate_left(struct rb_tree_node *x);
 void rb_tree_rotate_right(struct rb_tree_node *x);
 
 void rb_tree_deinit(struct rb_tree_node *root);
+
+struct rb_tree_node *rb_tree_delete(struct rb_tree_node *root, uint32_t val);

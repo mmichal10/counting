@@ -300,6 +300,8 @@ static inline void replace_node(struct rb_tree_node *old_node, struct rb_tree_no
 		parent->right = new_node;
 		if (new_node != NULL)
 			new_node->parent = parent;
+	} else if (parent == NULL && new_node != NULL) {
+			new_node->parent = parent;
 	} else {
 		assert(parent == NULL);
 	}
@@ -361,6 +363,9 @@ struct rb_tree_node *rb_tree_delete(struct rb_tree_node *root, uint32_t val) {
 	struct rb_tree_node *replacing_node;
 	struct rb_tree_node *node_to_fix = NULL;
 	uint8_t target_node_color;
+	uint8_t replacing_node_color;
+	struct rb_tree_node dummy_node = {};
+	uint8_t target_is_left_child;
 
 	if (root == NULL)
 		return NULL;
@@ -374,7 +379,6 @@ struct rb_tree_node *rb_tree_delete(struct rb_tree_node *root, uint32_t val) {
 	right_child = target_node->right;
 	target_node_color = target_node->color;
 
-
 	if (left_child == NULL && right_child == NULL && target_node_color == RB_TREE_COLOR_RED) {
 		replace_node(target_node, NULL);
 
@@ -383,42 +387,106 @@ struct rb_tree_node *rb_tree_delete(struct rb_tree_node *root, uint32_t val) {
 		return rb_tree_get_root(parent);
 	}
 
-	replacing_node = _get_replacing_node(target_node);
-	if (replacing_node != NULL && replacing_node->left != NULL) {
-		node_to_fix = replacing_node->left;
-		replace_node(replacing_node, replacing_node->left);
-	} else if (replacing_node != NULL && replacing_node->right != NULL) {
-		node_to_fix = replacing_node->right;
-		replace_node(replacing_node, replacing_node->right);
-	} else {
-		replace_node(replacing_node, NULL);
-	}
+	dummy_node.left = 0xdeafbeef;
+	dummy_node.right = 0xdeafbeef;
+	dummy_node.color = RB_TREE_COLOR_BLACK;
 
-	if (target_node->color == RB_TREE_COLOR_RED) {
+	if (target_node->left == NULL) {
+		replacing_node = target_node->right;
+
+		if (replacing_node != NULL)
+			node_to_fix = replacing_node->right;
+
+		if (node_to_fix == NULL) {
+			if (replacing_node == NULL) {
+				assert(parent != NULL);
+				dummy_node.parent = parent;
+			} else {
+				dummy_node.parent = replacing_node;
+			}
+
+			target_is_left_child = (dummy_node.parent->left == target_node);
+		}
+		replace_node(target_node, replacing_node);
+
+		if (node_to_fix == NULL) {
+			node_to_fix = &dummy_node;
+			if (target_is_left_child)
+				dummy_node.parent->left = &dummy_node;
+			else
+				dummy_node.parent->right = &dummy_node;
+		}
+
+		if (replacing_node != NULL) {
+			replacing_node_color = replacing_node->color;
+			replacing_node->color = target_node_color;
+		} else {
+			replacing_node_color = RB_TREE_COLOR_BLACK;
+		}
 		rb_tree_dealloc_node(target_node);
 
-		return rb_tree_get_root(parent);
+	} else if (target_node->right == NULL) {
+		replacing_node = target_node->left;
+
+		if (replacing_node != NULL)
+			node_to_fix = replacing_node->right;
+
+		if (node_to_fix == NULL) {
+			if (replacing_node == NULL) {
+				assert(parent != NULL);
+				dummy_node.parent = parent;
+			} else {
+				dummy_node.parent = replacing_node;
+			}
+
+			target_is_left_child = (dummy_node.parent->left == target_node);
+		}
+
+		replace_node(target_node, replacing_node);
+
+		if (node_to_fix == NULL) {
+			node_to_fix = &dummy_node;
+			if (target_is_left_child)
+				dummy_node.parent->left = &dummy_node;
+			else
+				dummy_node.parent->right = &dummy_node;
+		}
+
+		if (replacing_node != NULL) {
+			replacing_node_color = replacing_node->color;
+			replacing_node->color = target_node_color;
+		} else {
+			replacing_node_color = RB_TREE_COLOR_BLACK;
+		}
+
+		rb_tree_dealloc_node(target_node);
+	} else if (target_node->right != NULL && target_node->left != NULL) {
+		replacing_node = _get_replacing_node(target_node);
+		assert(replacing_node != NULL);
+
+		node_to_fix = replacing_node->right;
+
+		if (node_to_fix == NULL)
+			node_to_fix = &dummy_node;
+
+		replace_node(replacing_node, node_to_fix);
+
+		replace_node(target_node, replacing_node);
+
+		replacing_node_color = replacing_node->color;
+		replacing_node->color = target_node_color;
+
+		rb_tree_dealloc_node(target_node);
 	}
 
-	if (replacing_node == NULL) {
-		node_to_fix = parent;
-	} else {
-		clear_pointers(replacing_node);
-		replacing_node->color = target_node->color;
-	}
-
-	replace_node(target_node, replacing_node);
-
-	rb_tree_dealloc_node(target_node);
-	
-	//if (node_to_fix == NULL)
-		//return _get_root_somehow(parent, left_child, right_child);
+	if (target_node_color == RB_TREE_COLOR_RED || replacing_node_color == RB_TREE_COLOR_RED)
+		goto remove_dummy_node;
 
 	// Here comes the fixing
 
 	struct rb_tree_node *sybling;
 
-	while (node_to_fix != NULL && node_to_fix->parent != NULL && node_to_fix->color != RB_TREE_COLOR_BLACK) {
+	while (node_to_fix != NULL && node_to_fix->parent != NULL && node_to_fix->color == RB_TREE_COLOR_BLACK) {
 		if (node_to_fix == node_to_fix->parent->left) {
 			sybling = node_to_fix->parent->right;
 			if (sybling != NULL && sybling->color == RB_TREE_COLOR_RED) {
@@ -430,7 +498,8 @@ struct rb_tree_node *rb_tree_delete(struct rb_tree_node *root, uint32_t val) {
 				sybling = node_to_fix->parent->right;
 			}
 
-			if ((sybling->left == NULL || sybling->left->color == RB_TREE_COLOR_BLACK) &&
+			if (sybling &&
+				(sybling->left == NULL || sybling->left->color == RB_TREE_COLOR_BLACK) &&
 				(sybling->right == NULL || sybling->right->color == RB_TREE_COLOR_BLACK)) {
 
 					sybling->color = RB_TREE_COLOR_RED;
@@ -438,7 +507,8 @@ struct rb_tree_node *rb_tree_delete(struct rb_tree_node *root, uint32_t val) {
 					continue;
 
 			} else {
-				if ((sybling->right == NULL || sybling->right->color == RB_TREE_COLOR_BLACK) &&
+				if (sybling != NULL &&
+						(sybling->right == NULL || sybling->right->color == RB_TREE_COLOR_BLACK) &&
 						sybling->left != NULL) {
 					sybling->left->color = RB_TREE_COLOR_BLACK;
 					sybling->color = RB_TREE_COLOR_RED;
@@ -446,11 +516,15 @@ struct rb_tree_node *rb_tree_delete(struct rb_tree_node *root, uint32_t val) {
 					sybling = node_to_fix->parent->right;
 				}
 				
-				sybling->color = node_to_fix->parent->color;
+				if (sybling != NULL)
+					sybling->color = node_to_fix->parent->color;
+
 				node_to_fix->parent->color = RB_TREE_COLOR_BLACK;
-				assert(sybling->right != NULL);
-				sybling->right->color = RB_TREE_COLOR_BLACK;
-				rb_tree_rotate_left(node_to_fix);
+				if (sybling != NULL) {
+					assert(sybling->right != NULL);
+					sybling->right->color = RB_TREE_COLOR_BLACK;
+					rb_tree_rotate_left(node_to_fix->parent);
+				}
 				node_to_fix = rb_tree_get_root(node_to_fix);
 			}
 
@@ -466,7 +540,8 @@ struct rb_tree_node *rb_tree_delete(struct rb_tree_node *root, uint32_t val) {
 				sybling = node_to_fix->parent->left;
 			}
 
-			if ((sybling->right == NULL || sybling->right->color == RB_TREE_COLOR_BLACK) &&
+			if (sybling != NULL &&
+				(sybling->right == NULL || sybling->right->color == RB_TREE_COLOR_BLACK) &&
 				(sybling->left == NULL || sybling->left->color == RB_TREE_COLOR_BLACK)) {
 
 					sybling->color = RB_TREE_COLOR_RED;
@@ -474,7 +549,8 @@ struct rb_tree_node *rb_tree_delete(struct rb_tree_node *root, uint32_t val) {
 					continue;
 
 			} else {
-				if ((sybling->left == NULL || sybling->left->color == RB_TREE_COLOR_BLACK) &&
+				if (sybling != NULL &&
+						(sybling->left == NULL || sybling->left->color == RB_TREE_COLOR_BLACK) &&
 						sybling->right != NULL) {
 					sybling->right->color = RB_TREE_COLOR_BLACK;
 					sybling->color = RB_TREE_COLOR_RED;
@@ -482,11 +558,16 @@ struct rb_tree_node *rb_tree_delete(struct rb_tree_node *root, uint32_t val) {
 					sybling = node_to_fix->parent->left;
 				}
 				
-				sybling->color = node_to_fix->parent->color;
+				if (sybling != NULL)
+					sybling->color = node_to_fix->parent->color;
+
 				node_to_fix->parent->color = RB_TREE_COLOR_BLACK;
-				assert(sybling->left != NULL);
-				sybling->left->color = RB_TREE_COLOR_BLACK;
-				rb_tree_rotate_right(node_to_fix);
+
+				if (sybling != NULL) {
+					assert(sybling->left != NULL);
+					sybling->left->color = RB_TREE_COLOR_BLACK;
+					rb_tree_rotate_right(node_to_fix->parent);
+				}
 				node_to_fix = rb_tree_get_root(node_to_fix);
 			}
 
@@ -494,6 +575,18 @@ struct rb_tree_node *rb_tree_delete(struct rb_tree_node *root, uint32_t val) {
 		} else {
 			assert(0);
 		}
+	}
+	if (node_to_fix != NULL)
+		node_to_fix->color = RB_TREE_COLOR_BLACK;
+
+remove_dummy_node:
+	if (dummy_node.parent != NULL) {
+		if (dummy_node.parent->left == &dummy_node)
+			dummy_node.parent->left = NULL;
+		else if (dummy_node.parent->right == &dummy_node)
+			dummy_node.parent->right = NULL;
+		else
+			assert(0);
 	}
 
 	return _get_root_somehow(node_to_fix, NULL, NULL);
