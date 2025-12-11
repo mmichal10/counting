@@ -14,19 +14,43 @@ struct rb_tree_node {
 	struct rb_tree_node *parent;
 	struct rb_tree_node *left;
 	struct rb_tree_node *right;
+
+	uint64_t exists;
+	uint64_t visited;
+
 	uint8_t color;
-	uint8_t visited;
 };
 
+#define RB_TREE_GET_MIN_NODE_RANGE(__value) (__value & 0xffffffc0)
+#define RB_TREE_GET_MAX_NODE_RANGE(__value) (__value | 0x0000003f)
+#define RB_TREE_GET_ID_IN_NODE_RANGE(__value) (__value & 0x0000003f)
+
+#define RB_TREE_VALUE_EXISTS(__node, __value) \
+	(__node->exists & RB_TREE_GET_ID_IN_NODE_RANGE(__value))
+
+#define RB_TREE_VALUE_WAS_VISITED(__node, __value) \
+	(__node->visited & RB_TREE_GET_ID_IN_NODE_RANGE(__value))
+
+#define RB_TREE_SET_EXISTS(__node, __value) \
+	(__node->exists |= RB_TREE_GET_ID_IN_NODE_RANGE(__value))
+
+#define RB_TREE_SET_WAS_VISITED(__node, __value) \
+	(__node->visited |= RB_TREE_GET_ID_IN_NODE_RANGE(__value))
+
 struct rb_tree_node *rb_tree_alloc_node(uint32_t val, struct rb_tree_node *parent) {
+	uint32_t id_in_range;
+
 	struct rb_tree_node *ret = calloc(1, sizeof(struct rb_tree_node));
 	if (ret == NULL)
 		return NULL;
 
-	ret->range_min = val;
-	ret->range_max = val;
+	ret->range_min = RB_TREE_GET_MIN_NODE_RANGE(val);
+	ret->range_max = RB_TREE_GET_MAX_NODE_RANGE(val);
+	id_in_range = RB_TREE_GET_ID_IN_NODE_RANGE(val);
 	ret->parent = parent;
 	ret->color = RB_TREE_COLOR_RED;
+
+	RB_TREE_SET_EXISTS(ret, val);
 	ret->visited = 0;
 
 	return ret;
@@ -64,14 +88,20 @@ struct rb_tree_node *rb_tree_insert(struct rb_tree_node *node, uint32_t val) {
 
 	struct rb_tree_node *new_node;
 	
-	// Allocate the root
-	if (node == NULL) // TODO Is there unlikely() in the userpsace?
+	if (node == NULL)
 		return rb_tree_alloc_node(val, NULL);
 
 	if (node->range_min > val && node->left != NULL)
 		return rb_tree_insert(node->left, val);
 	else if (node->range_max < val && node->right != NULL)
 		return rb_tree_insert(node->right, val);
+
+	if (val >= node->range_min && val <= node->range_max) {
+		// I assume that the code doesn't depend on checking the if the value
+		// already exsists in the cache
+		RB_TREE_SET_EXISTS(node, val);
+		return node;
+	}
 
 	new_node = rb_tree_alloc_node(val, node);
 	if (new_node == NULL)
@@ -241,11 +271,19 @@ struct rb_tree_node* rb_tree_insert_and_fix_violations(struct rb_tree_node *node
 }
 
 struct rb_tree_node *rb_tree_find(struct rb_tree_node *node, uint32_t val) {
+	uint32_t id_in_range;
+
 	if (node == NULL)
 		return NULL;
 
-	if (val >= node->range_min && val <= node->range_max)
-		return node;
+	id_in_range = RB_TREE_GET_ID_IN_NODE_RANGE(val);
+
+	if (val >= node->range_min && val <= node->range_max) {
+		if (RB_TREE_VALUE_EXISTS(node, val))
+			return node;
+
+		return NULL;
+	}
 
 	if (val < node->range_min)
 		return rb_tree_find(node->left, val);
@@ -387,8 +425,8 @@ struct rb_tree_node *rb_tree_delete(struct rb_tree_node *root, uint32_t val) {
 		return rb_tree_get_root(parent);
 	}
 
-	dummy_node.left = 0xdeafbeef;
-	dummy_node.right = 0xdeafbeef;
+	dummy_node.left = (void*)0xdeafbeef;
+	dummy_node.right = (void*)0xdeafbeef;
 	dummy_node.color = RB_TREE_COLOR_BLACK;
 
 	if (target_node->left == NULL) {
@@ -492,7 +530,7 @@ struct rb_tree_node *rb_tree_delete(struct rb_tree_node *root, uint32_t val) {
 			if (sybling != NULL && sybling->color == RB_TREE_COLOR_RED) {
 				sybling->color = RB_TREE_COLOR_BLACK;
 				node_to_fix->parent->color = RB_TREE_COLOR_RED;
-				rb_tree_rotate_left(node_to_fix);
+				rb_tree_rotate_left(node_to_fix->parent);
 
 				// After the shift left node_to_fix has a new parent, so sybling changed as well
 				sybling = node_to_fix->parent->right;
@@ -534,7 +572,7 @@ struct rb_tree_node *rb_tree_delete(struct rb_tree_node *root, uint32_t val) {
 			if (sybling != NULL && sybling->color == RB_TREE_COLOR_RED) {
 				sybling->color = RB_TREE_COLOR_BLACK;
 				node_to_fix->parent->color = RB_TREE_COLOR_RED;
-				rb_tree_rotate_right(node_to_fix);
+				rb_tree_rotate_right(node_to_fix->parent);
 
 				// After the shift right node_to_fix has a new parent, so sybling changed as well
 				sybling = node_to_fix->parent->left;

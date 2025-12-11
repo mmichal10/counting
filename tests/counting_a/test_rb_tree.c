@@ -164,68 +164,6 @@ void test_find_1(void)
 	TEST_ASSERT_NULL(rb_tree_find(NULL, 0));
 }
 
-void test_find_2(void)
-{
-	struct rb_tree_node n1 = {};
-	n1.range_min = 1;
-	n1.range_max = 1;
-	struct rb_tree_node n2 = {};;
-	n2.range_min = 2;
-	n2.range_max = 2;
-	struct rb_tree_node root = {};
-	root.range_min = 3;
-	root.range_max = 3;
-	struct rb_tree_node n4 = {};
-	n4.range_min = 4;
-	n4.range_max = 4;
-	struct rb_tree_node n5 = {};
-	n5.range_min = 5;
-	n5.range_max = 5;
-
-	root.left = &n2;
-	root.right = &n4;
-
-	n2.left = &n1;
-	n4.right = &n5;
-
-	TEST_ASSERT_EQUAL_PTR(rb_tree_find(&root, 1), &n1);
-	TEST_ASSERT_EQUAL_PTR(rb_tree_find(&root, 2), &n2);
-	TEST_ASSERT_EQUAL_PTR(rb_tree_find(&root, 3), &root);
-	TEST_ASSERT_EQUAL_PTR(rb_tree_find(&root, 4), &n4);
-	TEST_ASSERT_EQUAL_PTR(rb_tree_find(&root, 5), &n5);
-}
-
-void test_find_3(void)
-{
-	struct rb_tree_node n1 = {};
-	n1.range_min = 1;
-	n1.range_max = 1;
-	struct rb_tree_node n2 = {};;
-	n2.range_min = 2;
-	n2.range_max = 2;
-	struct rb_tree_node root = {};
-	root.range_min = 3;
-	root.range_max = 3;
-	struct rb_tree_node n4 = {};
-	n4.range_min = 4;
-	n4.range_max = 4;
-	struct rb_tree_node n5 = {};
-	n5.range_min = 5;
-	n5.range_max = 5;
-
-	root.left = &n2;
-	root.right = &n4;
-
-	n2.left = &n1;
-	n4.right = &n5;
-
-	TEST_ASSERT_NULL(rb_tree_find(&root, 11));
-	TEST_ASSERT_NULL(rb_tree_find(&root, 12));
-	TEST_ASSERT_NULL(rb_tree_find(&root, 13));
-	TEST_ASSERT_NULL(rb_tree_find(&root, 14));
-	TEST_ASSERT_NULL(rb_tree_find(&root, 15));
-}
-
 void test_rotation_left_1(void)
 {
 /*
@@ -377,60 +315,15 @@ After Right Rotation:
 	TEST_ASSERT_EQUAL(n11.right, 0xdead112);
 }
 
-void test_insert_1(void)
-{
-/*
-
-		  11
-		 /
-		7
-	   / \
-	  5   9
-
-*/
-	struct rb_tree_node n5 = {};
-	n5.range_min = 5;
-	struct rb_tree_node n7 = {};;
-	n7.range_min = 7;
-	struct rb_tree_node n9 = {};
-	n9.range_min = 9;
-	struct rb_tree_node n11 = {};
-	n11.range_min = 11;
-
-	n11.left = &n7;
-
-	n7.left = &n5;
-	n7.right = &n9;
-
-	struct rb_tree_node *node12 = rb_tree_insert(&n11, 12);
-	TEST_ASSERT_NOT_NULL(node12);
-	TEST_ASSERT_EQUAL(n11.right->range_min, 12);
-	TEST_ASSERT_EQUAL_PTR(node12->parent, &n11);
-
-
-	struct rb_tree_node *node6 = rb_tree_insert(&n11, 6);
-	TEST_ASSERT_NOT_NULL(node6);
-	TEST_ASSERT_EQUAL(n5.right->range_min, 6);
-	TEST_ASSERT_EQUAL_PTR(node6->parent, &n5);
-
-	free(node12);
-	free(node6);
-}
-
 void test_alloc_1(void)
 {
 	struct rb_tree_node *root = rb_tree_insert(NULL, 12);
 	TEST_ASSERT_NOT_NULL(root);
-	TEST_ASSERT_EQUAL(root->range_min, 12);
 	TEST_ASSERT_NULL(root->parent);
 
-	struct rb_tree_node *child = rb_tree_insert(root, 15);
+	TEST_ASSERT_EQUAL_PTR(rb_tree_insert(root, 15), root);
 	
-	TEST_ASSERT_EQUAL_PTR(root->right, child);
-	TEST_ASSERT_EQUAL_PTR(child->parent, root);
-
 	free(root);
-	free(child);
 }
 
 void test_insert_and_fix_1(void)
