@@ -26,16 +26,16 @@ struct rb_tree_node {
 #define RB_TREE_GET_ID_IN_NODE_RANGE(__value) (__value & 0x0000003f)
 
 #define RB_TREE_VALUE_EXISTS(__node, __value) \
-	(__node->exists & RB_TREE_GET_ID_IN_NODE_RANGE(__value))
+	(__node->exists & (1 << RB_TREE_GET_ID_IN_NODE_RANGE(__value)))
 
 #define RB_TREE_VALUE_WAS_VISITED(__node, __value) \
-	(__node->visited & RB_TREE_GET_ID_IN_NODE_RANGE(__value))
+	(__node->visited & (1 << RB_TREE_GET_ID_IN_NODE_RANGE(__value)))
 
 #define RB_TREE_SET_EXISTS(__node, __value) \
-	(__node->exists |= RB_TREE_GET_ID_IN_NODE_RANGE(__value))
+	(__node->exists |= (1 << RB_TREE_GET_ID_IN_NODE_RANGE(__value)))
 
 #define RB_TREE_SET_WAS_VISITED(__node, __value) \
-	(__node->visited |= RB_TREE_GET_ID_IN_NODE_RANGE(__value))
+	(__node->visited |= (1 << RB_TREE_GET_ID_IN_NODE_RANGE(__value)))
 
 struct rb_tree_node *rb_tree_alloc_node(uint32_t val, struct rb_tree_node *parent) {
 	uint32_t id_in_range;
