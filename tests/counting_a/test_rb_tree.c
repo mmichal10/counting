@@ -135,6 +135,20 @@ static void assert_tree_matches(struct rb_tree_node *root, const uint32_t *expec
 	free(buffer);
 }
 
+static size_t build_expected(const int *present, size_t size, uint32_t *buffer)
+{
+	size_t count = 0;
+
+	for (size_t i = 0; i < size; i++) {
+		if (present[i]) {
+			buffer[count] = (uint32_t)i;
+			count++;
+		}
+	}
+
+	return count;
+}
+
 void setUp(void)
 {
 }
@@ -1005,6 +1019,51 @@ void test_insert_and_fix_11(void)
 	TEST_ASSERT_EQUAL(n6->color, RB_TREE_COLOR_RED);
 }
 
+void test_mixed_stress_insert_delete(void)
+{
+	const size_t max_key = 700;
+	int present[700] = {0};
+	uint32_t expected[700];
+	size_t expected_count;
+	struct rb_tree_node *root = NULL;
+	struct rb_tree_node *node;
+	size_t i;
+
+	for (i = 0; i < 600; i++) {
+		node = rb_tree_insert_and_fix_violations(root, (uint32_t)i);
+		TEST_ASSERT_NOT_NULL(node);
+		root = rb_tree_get_root(node);
+		present[i] = 1;
+
+		expected_count = build_expected(present, max_key, expected);
+		assert_tree_properties(root);
+		assert_tree_matches(root, expected, expected_count);
+	}
+
+	for (i = 600; i < 700; i++) {
+		node = rb_tree_insert_and_fix_violations(root, (uint32_t)i);
+		TEST_ASSERT_NOT_NULL(node);
+		root = rb_tree_get_root(node);
+		present[i] = 1;
+
+		expected_count = build_expected(present, max_key, expected);
+		assert_tree_properties(root);
+		assert_tree_matches(root, expected, expected_count);
+
+		uint32_t remove_key = (uint32_t)(i - 600);
+		root = rb_tree_delete(root, remove_key);
+		if (root != NULL)
+			root = rb_tree_get_root(root);
+		present[remove_key] = 0;
+
+		expected_count = build_expected(present, max_key, expected);
+		assert_tree_properties(root);
+		assert_tree_matches(root, expected, expected_count);
+	}
+
+	rb_tree_deinit(root);
+}
+
 void test_delete_red_leaf(void)
 {
 	struct rb_tree_node *root = rb_tree_insert_and_fix_violations(NULL, 10);
@@ -1637,6 +1696,7 @@ int main(void) {
     RUN_TEST(test_insert_and_fix_9);
     RUN_TEST(test_insert_and_fix_10);
     RUN_TEST(test_insert_and_fix_11);
+    RUN_TEST(test_mixed_stress_insert_delete);
     RUN_TEST(test_delete_red_leaf);
     RUN_TEST(test_delete_black_node_with_single_red_child);
     RUN_TEST(test_delete_node_with_two_children);
