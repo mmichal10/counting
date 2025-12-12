@@ -9,6 +9,40 @@ void tearDown(void)
 {
 }
 
+void test_prepare_shards_cover_full_range(void)
+{
+	TEST_ASSERT_TRUE(SHARDS > 0);
+
+	struct tree_owner ctx[SHARDS] = {0};
+	uint32_t i;
+	uint64_t expected_min64;
+	uint64_t expected_max64;
+
+	prepare_shards(ctx, SHARDS, SHARD_SIZE);
+
+	for (i = 0; i < SHARDS; i++) {
+		expected_min64 = (uint64_t)i * SHARD_SIZE;
+		expected_max64 = (i == SHARDS - 1)
+			? (uint64_t)MAX_INPUT
+			: ((uint64_t)(i + 1) * SHARD_SIZE) - 1;
+
+		TEST_ASSERT_EQUAL_UINT32((uint32_t)expected_min64, ctx[i].shard_range_min);
+		TEST_ASSERT_EQUAL_UINT32((uint32_t)expected_max64, ctx[i].shard_range_max);
+		TEST_ASSERT_TRUE(ctx[i].shard_range_min <= ctx[i].shard_range_max);
+
+		if (i > 0) {
+			TEST_ASSERT_EQUAL_UINT32(
+				(uint32_t)(((uint64_t)ctx[i - 1].shard_range_max) + 1),
+				ctx[i].shard_range_min);
+		}
+	}
+
+	TEST_ASSERT_EQUAL_UINT32(0u, ctx[0].shard_range_min);
+	TEST_ASSERT_EQUAL_UINT32(MAX_INPUT, ctx[SHARDS - 1].shard_range_max);
+
+	destroy_shards(ctx, SHARDS, SHARD_SIZE);
+}
+
 void test_countint_1(void)
 {
 	uint32_t i;
@@ -71,6 +105,7 @@ void test_countint_2(void)
 
 int main(void) {
     UNITY_BEGIN();
+    RUN_TEST(test_prepare_shards_cover_full_range);
     RUN_TEST(test_countint_1);
     RUN_TEST(test_countint_2);
 
