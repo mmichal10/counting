@@ -89,7 +89,6 @@ int count_numbers(uint32_t *arr, int count, struct tree_owner ctx[]) {
 		if (tmp != NULL) {
 			res = pthread_rwlock_rdlock(&shard->visited_lock);
 			assert(res == 0);
-			
 
 			if (RB_TREE_VALUE_WAS_VISITED(tmp, arr[i])) {
 				res = pthread_rwlock_unlock(&shard->visited_lock);
@@ -116,9 +115,25 @@ int count_numbers(uint32_t *arr, int count, struct tree_owner ctx[]) {
 
 		tmp = rb_tree_find(shard->root, arr[i]);
 		if (tmp != NULL) {
-			if (RB_TREE_VALUE_WAS_VISITED(tmp, arr[i])) {
-				shard->repeated_elements++;
-				RB_TREE_SET_WAS_VISITED(tmp, arr[i]);
+			res = pthread_rwlock_rdlock(&shard->visited_lock);
+			assert(res == 0);
+			if (RB_TREE_VALUE_WAS_VISITED(tmp, arr[i]) == 0) {
+				res = pthread_rwlock_unlock(&shard->visited_lock);
+				assert(res == 0);
+
+				res = pthread_rwlock_wrlock(&shard->visited_lock);
+				assert(res == 0);
+
+				if (RB_TREE_VALUE_WAS_VISITED(tmp, arr[i]) == 0) {
+					shard->repeated_elements++;
+					RB_TREE_SET_WAS_VISITED(tmp, arr[i]);
+				}
+
+				res = pthread_rwlock_unlock(&shard->visited_lock);
+				assert(res == 0);
+			} else {
+				res = pthread_rwlock_unlock(&shard->visited_lock);
+				assert(res == 0);
 			}
 			res = pthread_rwlock_unlock(&shard->lock);
 			assert(res == 0);
