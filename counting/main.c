@@ -15,18 +15,23 @@ struct pthread_ctx {
 	uint32_t start_pos;
 	uint32_t end_pos;
 	int file_descryptor;
+	int shard_id;
 };
 
 #define MIN(__A, __B) (__A < __B ? __A : __B)
+
+#define READ_BATCH_SIZE 16384
+#define LOG_INTERVAL (READ_BATCH_SIZE * 256)
 
 void *sharded_counting(void *param) {
 	struct pthread_ctx *ctx = param;
 	uint32_t file_position = 0;
 	int read_bytes;
 	int read_size;
-	uint32_t arr[16384] = {};
+	uint32_t arr[READ_BATCH_SIZE] = {};
+	uint32_t log_threshold = ctx->start_pos % LOG_INTERVAL;
 
-	//printf("Start %u, end %u\n", ctx->start_pos, ctx->end_pos);
+	printf("Worker %d: STARTED\n", ctx->shard_id);
 	file_position = ctx->start_pos;
 
 	while (1) {
@@ -42,7 +47,13 @@ void *sharded_counting(void *param) {
 		file_position += read_bytes;
 		
 		count_numbers(arr, read_bytes/sizeof(uint32_t), trees);
+
+		if (file_position % LOG_INTERVAL == log_threshold) {
+			printf("Worker %d: processed %.2f%%\n", ctx->shard_id,
+					100 * ((float)(file_position - ctx->start_pos)/(float)(ctx->end_pos - ctx->start_pos)));
+		}
 	}
+	printf("Worker %d: FINISHED\n", ctx->shard_id);
 
 	return NULL;
 }
@@ -80,6 +91,8 @@ int main(int argc, char *argv[]) {
 		thread_params[i] = malloc(sizeof(struct pthread_ctx));
 		if (thread_params[i] == NULL)
 			goto end;
+
+		thread_params[i]->shard_id = i;
 
 		thread_params[i]->start_pos = i * file_chunk_size;
 		if (i == THREAD_COUNT - 1) 
