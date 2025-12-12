@@ -1222,20 +1222,20 @@ int main(void) {
     RUN_TEST(test_insert_within_single_range);
     RUN_TEST(test_insert_cross_range_boundary);
     RUN_TEST(test_insert_multiple_ranges_with_rebalancing);
-    //RUN_TEST(test_delete_red_leaf);
-    //RUN_TEST(test_delete_black_node_with_single_red_child);
-    //RUN_TEST(test_delete_node_with_two_children);
-    //RUN_TEST(test_delete_black_root_with_two_black_children);
-    //RUN_TEST(test_delete_black_node_with_red_successor);
-    //RUN_TEST(test_delete_black_leaf_with_far_red_nephew);
-    //RUN_TEST(test_delete_root_with_deep_subtrees);
-    //RUN_TEST(test_delete_black_internal_node_with_red_sibling);
-    //RUN_TEST(test_delete_black_node_with_cascading_double_black);
-    //RUN_TEST(test_delete_black_node_requiring_dummy_leaf);
-    //RUN_TEST(test_delete_black_leaf_with_far_red_nephew_full_fix);
-    //RUN_TEST(test_sequential_deletions_triggering_rotations);
-    //RUN_TEST(test_root_remains_black_after_deleting_black_leaf);
-    //RUN_TEST(test_mixed_stress_insert_delete);
+    RUN_TEST(test_delete_red_leaf);
+    RUN_TEST(test_delete_black_node_with_single_red_child);
+    RUN_TEST(test_delete_node_with_two_children);
+    RUN_TEST(test_delete_black_root_with_two_black_children);
+    RUN_TEST(test_delete_black_node_with_red_successor);
+    RUN_TEST(test_delete_black_leaf_with_far_red_nephew);
+    RUN_TEST(test_delete_root_with_deep_subtrees);
+    RUN_TEST(test_delete_black_internal_node_with_red_sibling);
+    RUN_TEST(test_delete_black_node_with_cascading_double_black);
+    RUN_TEST(test_delete_black_node_requiring_dummy_leaf);
+    RUN_TEST(test_delete_black_leaf_with_far_red_nephew_full_fix);
+    RUN_TEST(test_sequential_deletions_triggering_rotations);
+    RUN_TEST(test_root_remains_black_after_deleting_black_leaf);
+    RUN_TEST(test_mixed_stress_insert_delete);
 
     return UNITY_END();
 }
