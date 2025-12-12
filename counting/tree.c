@@ -26,27 +26,24 @@ struct rb_tree_node {
 #define RB_TREE_GET_ID_IN_NODE_RANGE(__value) (__value & 0x0000003f)
 
 #define RB_TREE_VALUE_EXISTS(__node, __value) \
-	(__node->exists & (1 << RB_TREE_GET_ID_IN_NODE_RANGE(__value)))
+	(__node->exists & (uint64_t)((uint64_t)1 << RB_TREE_GET_ID_IN_NODE_RANGE(__value)))
 
 #define RB_TREE_VALUE_WAS_VISITED(__node, __value) \
-	(__node->visited & (1 << RB_TREE_GET_ID_IN_NODE_RANGE(__value)))
+	(__node->visited & (uint64_t)((uint64_t)1 << RB_TREE_GET_ID_IN_NODE_RANGE(__value)))
 
 #define RB_TREE_SET_EXISTS(__node, __value) \
-	(__node->exists |= (1 << RB_TREE_GET_ID_IN_NODE_RANGE(__value)))
+	(__node->exists |= (uint64_t)((uint64_t)1 << RB_TREE_GET_ID_IN_NODE_RANGE(__value)))
 
 #define RB_TREE_SET_WAS_VISITED(__node, __value) \
-	(__node->visited |= (1 << RB_TREE_GET_ID_IN_NODE_RANGE(__value)))
+	(__node->visited |= (uint64_t)((uint64_t)1 << RB_TREE_GET_ID_IN_NODE_RANGE(__value)))
 
 struct rb_tree_node *rb_tree_alloc_node(uint32_t val, struct rb_tree_node *parent) {
-	uint32_t id_in_range;
-
 	struct rb_tree_node *ret = calloc(1, sizeof(struct rb_tree_node));
 	if (ret == NULL)
 		return NULL;
 
 	ret->range_min = RB_TREE_GET_MIN_NODE_RANGE(val);
 	ret->range_max = RB_TREE_GET_MAX_NODE_RANGE(val);
-	id_in_range = RB_TREE_GET_ID_IN_NODE_RANGE(val);
 	ret->parent = parent;
 	ret->color = RB_TREE_COLOR_RED;
 
@@ -271,12 +268,8 @@ struct rb_tree_node* rb_tree_insert_and_fix_violations(struct rb_tree_node *node
 }
 
 struct rb_tree_node *rb_tree_find(struct rb_tree_node *node, uint32_t val) {
-	uint32_t id_in_range;
-
 	if (node == NULL)
 		return NULL;
-
-	id_in_range = RB_TREE_GET_ID_IN_NODE_RANGE(val);
 
 	if (val >= node->range_min && val <= node->range_max) {
 		if (RB_TREE_VALUE_EXISTS(node, val))
@@ -292,23 +285,6 @@ struct rb_tree_node *rb_tree_find(struct rb_tree_node *node, uint32_t val) {
 	else
 		assert(0);
 }
-
-/*
-static inline clear_pointers(struct rb_tree_node *node) {
-	if (node->parent != NULL && node == node->parent->left)
-		node->parent->left = NULL;
-	else if (node->parent != NULL && node == node->parent->right)
-		node->parent->right = NULL;
-	else
-		assert(node->parent == NULL);
-
-	if (node->left != NULL)
-		node->left->parent = NULL;
-
-	if (node->right != NULL)
-		node->right->parent = NULL;
-}
-*/
 
 static inline void clear_pointers(struct rb_tree_node *node) {
 	if (node == NULL)
