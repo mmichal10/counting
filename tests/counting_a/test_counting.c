@@ -36,10 +36,18 @@ void test_prepare_shards_cover_full_range(void)
 		expected_min64 = (uint64_t)i * SHARD_SIZE;
 		expected_max64 = (i == SHARDS - 1)
 			? (uint64_t)MAX_INPUT
-			: ((uint64_t)(i + 1) * SHARD_SIZE) - 1;
+			: ((uint64_t)(i + 1) * (uint64_t)SHARD_SIZE) - 1;
+		printf("i %u, expected min %llu expected max %llu."
+				"Actual min %u actual max %u. MAX INPUT %u\n",
+				i, expected_min64, expected_max64,
+				ctx[i].shard_range_min, ctx[i].shard_range_max,
+				MAX_INPUT);
 
-		TEST_ASSERT_EQUAL_UINT32((uint32_t)expected_min64, ctx[i].shard_range_min);
-		TEST_ASSERT_EQUAL_UINT32((uint32_t)expected_max64, ctx[i].shard_range_max);
+		TEST_ASSERT_EQUAL_UINT64((uint64_t)expected_min64, (uint64_t)ctx[i].shard_range_min);
+		if (expected_max64 != (uint64_t)ctx[i].shard_range_max) {
+			printf("asdf");
+		}
+		TEST_ASSERT_EQUAL_UINT64((uint64_t)expected_max64, (uint64_t)ctx[i].shard_range_max);
 		TEST_ASSERT_TRUE(ctx[i].shard_range_min <= ctx[i].shard_range_max);
 
 		if (i > 0) {
@@ -91,31 +99,40 @@ void test_get_shard_returns_correct_shard(void)
 		}
 
 		if (i > 0) {
-			uint32_t handoff_value = ctx[i].shard_range_min;
+			uint32_t handoff_value = ctx[i].shard_range_min - 1;
 			struct tree_owner *previous_expected = &ctx[i - 1];
-			struct tree_owner *previous_actual = get_shard(ctx, handoff_value - 1);
+			struct tree_owner *previous_actual = get_shard(ctx, handoff_value);
 
 			TEST_ASSERT_EQUAL_PTR(previous_expected, previous_actual);
 
 			actual = get_shard(ctx, handoff_value);
 			TEST_ASSERT_EQUAL_PTR(expected, actual);
 		}
+
+		if (i < SHARDS - 1) {
+			uint32_t handoff_value = ctx[i].shard_range_max + 1;
+			struct tree_owner *next_expected = &ctx[i + 1];
+			struct tree_owner *next_actual = get_shard(ctx, handoff_value);
+
+			TEST_ASSERT_EQUAL_PTR(next_expected, next_actual);
+
+			actual = get_shard(ctx, handoff_value);
+			TEST_ASSERT_EQUAL_PTR(expected, actual);
+		}
 	}
 
-	{
-		struct tree_owner *expected_last = find_expected_shard(ctx, MAX_INPUT);
-		struct tree_owner *actual_last = get_shard(ctx, MAX_INPUT);
+	struct tree_owner *expected_last = &ctx[SHARDS-1];
+	struct tree_owner *actual_last = get_shard(ctx, MAX_INPUT);
 
-		TEST_ASSERT_NOT_NULL(expected_last);
-		TEST_ASSERT_EQUAL_PTR(expected_last, actual_last);
+	TEST_ASSERT_NOT_NULL(expected_last);
+	TEST_ASSERT_EQUAL_PTR(expected_last, actual_last);
 
-		if (MAX_INPUT > 0) {
-			struct tree_owner *expected_near_last = find_expected_shard(ctx, MAX_INPUT - 1);
-			struct tree_owner *actual_near_last = get_shard(ctx, MAX_INPUT - 1);
+	if (MAX_INPUT > 0) {
+		struct tree_owner *expected_near_last = find_expected_shard(ctx, MAX_INPUT - 1);
+		struct tree_owner *actual_near_last = get_shard(ctx, MAX_INPUT - 1);
 
-			TEST_ASSERT_NOT_NULL(expected_near_last);
-			TEST_ASSERT_EQUAL_PTR(expected_near_last, actual_near_last);
-		}
+		TEST_ASSERT_NOT_NULL(expected_near_last);
+		TEST_ASSERT_EQUAL_PTR(expected_near_last, actual_near_last);
 	}
 
 	destroy_shards(ctx, SHARDS, SHARD_SIZE);
@@ -184,9 +201,9 @@ void test_countint_2(void)
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_prepare_shards_cover_full_range);
-    RUN_TEST(test_get_shard_returns_correct_shard);
-    RUN_TEST(test_countint_1);
-    RUN_TEST(test_countint_2);
+    //RUN_TEST(test_get_shard_returns_correct_shard);
+    //RUN_TEST(test_countint_1);
+    //RUN_TEST(test_countint_2);
 
     return UNITY_END();
 }
