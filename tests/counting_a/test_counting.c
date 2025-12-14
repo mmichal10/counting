@@ -13,6 +13,49 @@ static struct tree_owner *find_expected_shard(struct tree_owner ctx[], uint32_t 
 	return NULL;
 }
 
+static struct rb_tree_node *insert_value_into_owner(struct tree_owner *owner, uint32_t value)
+{
+	struct rb_tree_node *node = rb_tree_find(owner->root, value);
+
+	if (node == NULL) {
+		node = rb_tree_insert_and_fix_violations(owner->root, value);
+		TEST_ASSERT_NOT_NULL(node);
+
+		owner->tree_size++;
+		owner->root = owner->root ? rb_tree_get_root(owner->root) : node;
+
+		node = rb_tree_find(owner->root, value);
+		TEST_ASSERT_NOT_NULL(node);
+	}
+
+	return node;
+}
+
+static void mark_value_as_repeated(struct tree_owner *owner, struct rb_tree_node *node, uint32_t value)
+{
+	TEST_ASSERT_NOT_NULL(node);
+
+	if (RB_TREE_VALUE_WAS_VISITED(node, value) == 0) {
+		owner->repeated_elements++;
+		RB_TREE_SET_WAS_VISITED(node, value);
+	}
+}
+
+static uint32_t total_unique_numbers(struct tree_owner ctx[])
+{
+	return aggregate_unique_numbers(ctx, SHARDS);
+}
+
+static uint32_t total_seen_once_numbers(struct tree_owner ctx[])
+{
+	return aggregate_seen_only_once(ctx, SHARDS);
+}
+
+static uint32_t total_repeated_numbers(struct tree_owner ctx[])
+{
+	return total_unique_numbers(ctx) - total_seen_once_numbers(ctx);
+}
+
 void setUp(void)
 {
 }
@@ -198,9 +241,84 @@ void test_countint_2(void)
 
 }
 
+void test_tree_api_handles_high_range_duplicates(void)
+{
+	struct tree_owner ctx[SHARDS] = {0};
+	const uint32_t range_start = 0xffffffffu - (1024u * 1024u);
+	const uint32_t range_end = 0xffffffffu;
+	const uint32_t range_count = (1024u * 1024u) + 1u;
+	const uint32_t segment = 16384u;
+	const uint32_t hot_start = 0xffffff00u;
+	const uint32_t expected_seen_once = range_count - (2u * segment);
+
+	prepare_shards(ctx, SHARDS, SHARD_SIZE);
+
+	for (uint32_t value = range_start;;) {
+		struct tree_owner *owner = get_shard(ctx, value);
+		TEST_ASSERT_NOT_NULL(owner);
+
+		struct rb_tree_node *node = insert_value_into_owner(owner, value);
+		TEST_ASSERT_NOT_NULL(node);
+		TEST_ASSERT_TRUE(RB_TREE_VALUE_EXISTS(node, value));
+
+		if (value == range_end)
+			break;
+
+		++value;
+	}
+
+	TEST_ASSERT_EQUAL_UINT32(range_count, total_unique_numbers(ctx));
+	TEST_ASSERT_EQUAL_UINT32(range_count, total_seen_once_numbers(ctx));
+	TEST_ASSERT_EQUAL_UINT32(0u, total_repeated_numbers(ctx));
+
+	for (uint32_t value = range_start; value < range_start + segment; ++value) {
+		struct tree_owner *owner = get_shard(ctx, value);
+		struct rb_tree_node *node = insert_value_into_owner(owner, value);
+		TEST_ASSERT_TRUE(RB_TREE_VALUE_EXISTS(node, value));
+		mark_value_as_repeated(owner, node, value);
+	}
+
+	for (uint32_t value = (range_end - segment) + 1u;;) {
+		struct tree_owner *owner = get_shard(ctx, value);
+		struct rb_tree_node *node = insert_value_into_owner(owner, value);
+		TEST_ASSERT_TRUE(RB_TREE_VALUE_EXISTS(node, value));
+		mark_value_as_repeated(owner, node, value);
+
+		if (value == range_end)
+			break;
+
+		++value;
+	}
+
+	TEST_ASSERT_EQUAL_UINT32(range_count, total_unique_numbers(ctx));
+	TEST_ASSERT_EQUAL_UINT32(expected_seen_once, total_seen_once_numbers(ctx));
+	TEST_ASSERT_EQUAL_UINT32(2u * segment, total_repeated_numbers(ctx));
+
+	for (int loop = 0; loop < 10; ++loop) {
+		for (uint32_t value = hot_start;;) {
+			struct tree_owner *owner = get_shard(ctx, value);
+			struct rb_tree_node *node = insert_value_into_owner(owner, value);
+			TEST_ASSERT_TRUE(RB_TREE_VALUE_EXISTS(node, value));
+			mark_value_as_repeated(owner, node, value);
+
+			if (value == 0xffffffffu)
+				break;
+
+			++value;
+		}
+
+		TEST_ASSERT_EQUAL_UINT32(range_count, total_unique_numbers(ctx));
+		TEST_ASSERT_EQUAL_UINT32(expected_seen_once, total_seen_once_numbers(ctx));
+		TEST_ASSERT_EQUAL_UINT32(2u * segment, total_repeated_numbers(ctx));
+	}
+
+	destroy_shards(ctx, SHARDS, SHARD_SIZE);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_prepare_shards_cover_full_range);
+    RUN_TEST(test_tree_api_handles_high_range_duplicates);
     //RUN_TEST(test_get_shard_returns_correct_shard);
     //RUN_TEST(test_countint_1);
     //RUN_TEST(test_countint_2);
