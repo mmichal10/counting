@@ -9,6 +9,10 @@
 #define COUNT 1000000000
 #define LIMIT (1024*1024*1024)
 
+uint32_t gen32(void) {
+	return ((uint32_t)rand() << 16) ^ (uint32_t)rand();
+}
+
 int main() {
 	char *inputfile_name = "random_numbers";
 	FILE *f = fopen(inputfile_name, "wb");
@@ -18,6 +22,8 @@ int main() {
 	srand((unsigned)time(NULL));
 	uint32_t seen_only_once = 0;
 	uint32_t unique_numbers = 0;
+	uint32_t curr_min = UINT_MAX;
+	uint32_t curr_max = 0;
 
 	if (f == NULL) {
 		printf("Failed to open file\n");
@@ -26,9 +32,13 @@ int main() {
 
 
 	for (i = 0; i < COUNT; i++) {
-		num = rand() % LIMIT;
+		num = gen32(); //% LIMIT;
+		if (num > curr_max)
+			curr_max = num;
+		if (num < curr_min)
+			curr_min = num;
 
-/*
+		/*
 		if (array[num] == 0) {
 			unique_numbers += 1;
 			seen_only_once += 1;
@@ -49,6 +59,7 @@ int main() {
 
 	printf("Unique numbers %u\n", unique_numbers);
 	printf("seen only once %u\n", seen_only_once);
+	printf("Curr min %u curr max %u\n", curr_min, curr_max);
 
 end:
 	fclose(f);
