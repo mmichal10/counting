@@ -10,29 +10,35 @@
 #include "tree.h"
 #include "config.h"
 
-#define MAX_INPUT 0xffffffff
-#define SHARD_SIZE (MAX_INPUT / SHARDS)
+#define COUNTING_MAX_INPUT (0xffffffffUL)
+#define SHARD_SIZE (COUNTING_MAX_INPUT / SHARDS)
 
 struct tree_owner {
-	uint32_t tree_size;
-	uint32_t repeated_elements;
+	uint64_t tree_size;
+	uint64_t repeated_elements;
 	struct rb_tree_node *root;
 
-	uint32_t shard_range_min;
-	uint32_t shard_range_max;
+	uint64_t shard_range_min;
+	uint64_t shard_range_max;
 
 	pthread_rwlock_t lock;
 
-	//This might be an atomic or per-tree-node lock
 	pthread_rwlock_t visited_lock;
 };
 
-struct tree_owner *get_shard(struct tree_owner ctx[], uint32_t number) {
-	int shard_id = number / SHARD_SIZE;
-	struct tree_owner *tmp = &ctx[shard_id];
+struct tree_owner *get_shard(struct tree_owner ctx[], uint64_t number) {
+	uint64_t shard_id = number / SHARD_SIZE;
+	struct tree_owner *tmp;
+
+	if (shard_id == SHARDS) {
+		assert(number >= ctx[SHARDS - 1].shard_range_min);
+		shard_id = SHARDS - 1;
+	}
+
+	tmp = &ctx[shard_id];
 
 	if (!(number >= tmp->shard_range_min && number <= tmp->shard_range_max)) {
-		printf("Wrong shard. Range %u - %u. Number %u\n",
+		printf("Wrong shard. Range %lu - %lu. Number %lu\n",
 			tmp->shard_range_min, tmp->shard_range_max, number);
 		assert(0);
 	}
@@ -40,8 +46,8 @@ struct tree_owner *get_shard(struct tree_owner ctx[], uint32_t number) {
 	return tmp;
 }
 
-void prepare_shards(struct tree_owner ctx[], uint32_t shards_count, uint32_t shard_size) {
-	uint32_t i;
+void prepare_shards(struct tree_owner ctx[], uint64_t shards_count, uint64_t shard_size) {
+	uint64_t i;
 
 	for (i = 0; i < shards_count; i++) {
 		ctx[i].shard_range_min = shard_size * i;
@@ -51,11 +57,11 @@ void prepare_shards(struct tree_owner ctx[], uint32_t shards_count, uint32_t sha
 		assert(pthread_rwlock_init(&ctx[i].visited_lock, 0) == 0);
 	}
 
-	ctx[shards_count - 1].shard_range_max = MAX_INPUT;
+	ctx[shards_count - 1].shard_range_max = COUNTING_MAX_INPUT;
 }
 
-void destroy_shards(struct tree_owner ctx[], uint32_t shards_count, uint32_t shard_size) {
-	uint32_t i;
+void destroy_shards(struct tree_owner ctx[], uint64_t shards_count, uint64_t shard_size) {
+	uint64_t i;
 
 	for (i = 0; i < shards_count; i++) {
 		assert(pthread_rwlock_destroy(&ctx[i].lock) == 0);
@@ -152,12 +158,12 @@ int count_numbers(uint32_t *arr, int count, struct tree_owner ctx[]) {
 	return 0;
 }
 
-uint32_t seen_only_once(struct tree_owner *owner) {
+uint64_t seen_only_once(struct tree_owner *owner) {
 	return owner->tree_size - owner->repeated_elements;
 }
 
-uint32_t aggregate_unique_numbers(struct tree_owner ctx[], uint32_t shards) {
-	uint32_t i;
+uint64_t aggregate_unique_numbers(struct tree_owner ctx[], uint64_t shards) {
+	uint64_t i;
 	int res = 0;
 	
 	for (i = 0; i < shards; i++)
@@ -166,8 +172,8 @@ uint32_t aggregate_unique_numbers(struct tree_owner ctx[], uint32_t shards) {
 	return res;
 }
 
-uint32_t aggregate_seen_only_once(struct tree_owner ctx[], uint32_t shards) {
-	uint32_t i;
+uint64_t aggregate_seen_only_once(struct tree_owner ctx[], uint64_t shards) {
+	uint64_t i;
 	int res = 0;
 	
 	for (i = 0; i < shards; i++) {

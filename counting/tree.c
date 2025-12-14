@@ -8,8 +8,8 @@
 #define RB_TREE_COLOR_RED 5
 
 struct rb_tree_node {
-	uint32_t range_min;
-	uint32_t range_max;
+	uint64_t range_min;
+	uint64_t range_max;
 
 	struct rb_tree_node *parent;
 	struct rb_tree_node *left;
@@ -37,7 +37,7 @@ struct rb_tree_node {
 #define RB_TREE_SET_WAS_VISITED(__node, __value) \
 	(__node->visited |= (uint64_t)((uint64_t)1 << RB_TREE_GET_ID_IN_NODE_RANGE(__value)))
 
-struct rb_tree_node *rb_tree_alloc_node(uint32_t val, struct rb_tree_node *parent) {
+struct rb_tree_node *rb_tree_alloc_node(uint64_t val, struct rb_tree_node *parent) {
 	struct rb_tree_node *ret = calloc(1, sizeof(struct rb_tree_node));
 	if (ret == NULL)
 		return NULL;
@@ -81,7 +81,7 @@ struct rb_tree_node *rb_tree_get_root(struct rb_tree_node *node) {
 		return node;
 }
 
-struct rb_tree_node *rb_tree_insert(struct rb_tree_node *node, uint32_t val) {
+struct rb_tree_node *rb_tree_insert(struct rb_tree_node *node, uint64_t val) {
 
 	struct rb_tree_node *new_node;
 	
@@ -255,7 +255,7 @@ void rb_tree_fix_violations(struct rb_tree_node *node) {
 	}
 }
 
-struct rb_tree_node* rb_tree_insert_and_fix_violations(struct rb_tree_node *node, uint32_t val) {
+struct rb_tree_node* rb_tree_insert_and_fix_violations(struct rb_tree_node *node, uint64_t val) {
 
 	struct rb_tree_node *new_node = rb_tree_insert(node, val);
 
@@ -267,7 +267,7 @@ struct rb_tree_node* rb_tree_insert_and_fix_violations(struct rb_tree_node *node
 	return new_node;
 }
 
-struct rb_tree_node *rb_tree_find(struct rb_tree_node *node, uint32_t val) {
+struct rb_tree_node *rb_tree_find(struct rb_tree_node *node, uint64_t val) {
 	if (node == NULL)
 		return NULL;
 
@@ -369,7 +369,7 @@ static inline struct rb_tree_node* _get_replacing_node(struct rb_tree_node *node
 	return replacing_node;
 }
 
-struct rb_tree_node *rb_tree_delete(struct rb_tree_node *root, uint32_t val) {
+struct rb_tree_node *rb_tree_delete(struct rb_tree_node *root, uint64_t val) {
 	struct rb_tree_node *parent;
 	struct rb_tree_node *left_child;
 	struct rb_tree_node *right_child;

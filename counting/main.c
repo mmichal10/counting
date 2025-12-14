@@ -85,7 +85,7 @@ int main(int argc, char *argv[]) {
 
 	prepare_shards(trees, SHARDS, SHARD_SIZE);
 
-	assert(trees[SHARDS - 1].shard_range_max == MAX_INPUT);
+	assert(trees[SHARDS - 1].shard_range_max == COUNTING_MAX_INPUT);
 
 	for (i = 0; i < THREAD_COUNT; i++) {
 		thread_params[i] = malloc(sizeof(struct pthread_ctx));
@@ -119,8 +119,8 @@ end:
 		free(thread_params[i]);
 	}
 
-	printf("Unique numbers %u\n", aggregate_unique_numbers(trees, SHARDS));
-	printf("Seen only once %u\n", aggregate_seen_only_once(trees, SHARDS));
+	printf("Unique numbers %lu\n", aggregate_unique_numbers(trees, SHARDS));
+	printf("Seen only once %lu\n", aggregate_seen_only_once(trees, SHARDS));
 
 	destroy_shards(trees, SHARDS, SHARD_SIZE);
 
