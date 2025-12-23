@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <stdlib.h>
+#include "hashtable.h"
 
 struct pthread_ctx {
 	uint32_t start_pos;
