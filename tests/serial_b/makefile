@@ -46,17 +46,22 @@ CFLAGS += -Wold-style-definition
 CFLAGS += -g
 #CFLAGS += -Wno-misleading-indentation
 
-TARGET_BASE1=test1
+TARGET_BASE1=test_hashtable
+TARGET_BASE2=test_json
 TARGET1 = $(TARGET_BASE1)$(TARGET_EXTENSION)
+TARGET2 = $(TARGET_BASE2)$(TARGET_EXTENSION)
 SRC_FILES1=$(UNITY_ROOT)/src/unity.c test_serial.c 
+SRC_FILES2=$(UNITY_ROOT)/src/unity.c test_json.c
 INC_DIRS=-I$(PROJECT_SRC) -I$(UNITY_ROOT)/src
 SYMBOLS=
 
 all: clean default
 
 default: $(SRC_FILES1)
-	$(C_COMPILER) $(CFLAGS) $(INC_DIRS) $(SYMBOLS) $(SRC_FILES1) -o $(TARGET1) -D_XOPEN_SOURCE=700 -pthread
+	$(C_COMPILER) $(CFLAGS) $(INC_DIRS) $(SYMBOLS) $(SRC_FILES1) -o $(TARGET1)
+	$(C_COMPILER) $(CFLAGS) $(INC_DIRS) $(SYMBOLS) $(SRC_FILES2) -o $(TARGET2) -D_POSIX_C_SOURCE=200809L -D_GNU_SOURCE
 	- ./$(TARGET1)
+	- ./$(TARGET2)
 
 #test/test_runners/TestProductionCode_Runner.c: test/TestProductionCode.c
 #	ruby $(UNITY_ROOT)/auto/generate_test_runner.rb test/TestProductionCode.c  test/test_runners/TestProductionCode_Runner.c

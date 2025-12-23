@@ -121,6 +121,7 @@ int hashtable_insert(struct hash_table_shard *shard, const char *key) {
 	uint32_t resize_threshold;
 	int res = 0;
 
+	assert(strlen(key) > 0);
 	assert(strlen(key) < MAX_KEY_LEN);
 
 	for (i = hash_table_id; i < shard_size; i++) {
