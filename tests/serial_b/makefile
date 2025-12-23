@@ -54,8 +54,8 @@ SYMBOLS=
 
 all: clean default
 
-default: $(SRC_FILES2)
-	$(C_COMPILER) $(CFLAGS) $(INC_DIRS) $(SYMBOLS) $(SRC_FILES2) -o $(TARGET1) -D_XOPEN_SOURCE=700 -pthread
+default: $(SRC_FILES1)
+	$(C_COMPILER) $(CFLAGS) $(INC_DIRS) $(SYMBOLS) $(SRC_FILES1) -o $(TARGET1) -D_XOPEN_SOURCE=700 -pthread
 	- ./$(TARGET1)
 
 #test/test_runners/TestProductionCode_Runner.c: test/TestProductionCode.c
