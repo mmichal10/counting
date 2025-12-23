@@ -5,21 +5,22 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <pthread.h>
-#include <stdatomic.h>
+#include <stdlib.h>
 
-#include "tree.h"
 #include "config.h"
 
 #define COUNTING_MAX_INPUT (0xffffffffUL)
 #define SHARD_SIZE (COUNTING_MAX_INPUT / SHARDS)
 
 struct tree_owner {
-	uint64_t tree_size;
+	uint64_t elements_in_map;
 	uint64_t repeated_elements;
-	struct rb_tree_node *root;
 
 	uint64_t shard_range_min;
 	uint64_t shard_range_max;
+
+	uint64_t *added_once;
+	uint64_t *added_twice;
 
 	pthread_rwlock_t lock;
 
@@ -48,6 +49,7 @@ struct tree_owner *get_shard(struct tree_owner ctx[], uint64_t number) {
 
 void prepare_shards(struct tree_owner ctx[], uint64_t shards_count, uint64_t shard_size) {
 	uint64_t i;
+	ssize_t allocation_size;
 
 	for (i = 0; i < shards_count; i++) {
 		ctx[i].shard_range_min = shard_size * i;
@@ -58,45 +60,74 @@ void prepare_shards(struct tree_owner ctx[], uint64_t shards_count, uint64_t sha
 	}
 
 	ctx[shards_count - 1].shard_range_max = COUNTING_MAX_INPUT;
+
+	for (i = 0; i < shards_count; i++) {
+		assert(ctx[i].shard_range_max > ctx[i].shard_range_min);
+		assert(ctx[i].shard_range_max - ctx[i].shard_range_min + 1 >= shard_size);
+
+		allocation_size = (ctx[i].shard_range_max - ctx[i].shard_range_min) / 64;
+		allocation_size += 1; // To not to bother with rounding up/down etc
+
+		ctx[i].added_once = calloc(allocation_size, sizeof(uint64_t));
+		assert(ctx[i].added_once != NULL);
+
+		ctx[i].added_twice = calloc(allocation_size, sizeof(uint64_t));
+		assert(ctx[i].added_twice != NULL);
+	}
 }
 
-void destroy_shards(struct tree_owner ctx[], uint64_t shards_count, uint64_t shard_size) {
+void destroy_shards(struct tree_owner ctx[], uint64_t shards_count) {
 	uint64_t i;
 
 	for (i = 0; i < shards_count; i++) {
 		assert(pthread_rwlock_destroy(&ctx[i].lock) == 0);
 		assert(pthread_rwlock_destroy(&ctx[i].visited_lock) == 0);
 
-		
-		rb_tree_deinit(ctx[i].root);
+		free(ctx[i].added_once);
+		free(ctx[i].added_twice);
 	}
 
 }
 
+#define COUNTING_VALUE_EXISTS(__shard, __cell_id, __bit_id) \
+	(__shard->added_once[__cell_id] & (uint64_t)((uint64_t)1 << __bit_id))
+
+#define COUNTING_VALUE_WAS_VISITED(__shard, __cell_id, __bit_id) \
+	(__shard->added_twice[__cell_id] & (uint64_t)((uint64_t)1 << __bit_id))
+
+#define COUNTING_SET_EXISTS(__shard, __cell_id, __bit_id) \
+	(__shard->added_once[__cell_id] |= (uint64_t)((uint64_t)1 << __bit_id))
+
+#define COUNTING_SET_WAS_VISITED(__shard, __cell_id, __bit_id) \
+	(__shard->added_twice[__cell_id] |= (uint64_t)((uint64_t)1 << __bit_id))
+
 int count_numbers(uint32_t *arr, int count, struct tree_owner ctx[]) {
 	int i;
-	struct rb_tree_node *tmp;
+	uint64_t exists;
 	struct tree_owner *shard;
 	int res;
 
 
 	for (i = 0; i < count; i++) {
-
 		shard = get_shard(ctx, arr[i]);
+
+		uint32_t val_id_in_shard = arr[i] - shard->shard_range_min;
+		uint32_t cell_id_in_array = val_id_in_shard / 64;
+		uint32_t bit_id_in_cell = val_id_in_shard % 64;
 
 		res = pthread_rwlock_rdlock(&shard->lock);
 		assert(res == 0);
 
-		tmp = rb_tree_find(shard->root, arr[i]);
+		exists = COUNTING_VALUE_EXISTS(shard, cell_id_in_array, bit_id_in_cell);
 
 		res = pthread_rwlock_unlock(&shard->lock);
 		assert(res == 0);
 
-		if (tmp != NULL) {
+		if (exists != 0) {
 			res = pthread_rwlock_rdlock(&shard->visited_lock);
 			assert(res == 0);
 
-			if (RB_TREE_VALUE_WAS_VISITED(tmp, arr[i])) {
+			if (COUNTING_VALUE_WAS_VISITED(shard, cell_id_in_array, bit_id_in_cell)) {
 				res = pthread_rwlock_unlock(&shard->visited_lock);
 				assert(res == 0);
 				continue;
@@ -107,9 +138,9 @@ int count_numbers(uint32_t *arr, int count, struct tree_owner ctx[]) {
 			res = pthread_rwlock_wrlock(&shard->visited_lock);
 			assert(res == 0);
 
-			if (RB_TREE_VALUE_WAS_VISITED(tmp, arr[i]) == 0) {
+			if (COUNTING_VALUE_WAS_VISITED(shard, cell_id_in_array, bit_id_in_cell) == 0) {
 				shard->repeated_elements++;
-				RB_TREE_SET_WAS_VISITED(tmp, arr[i]);
+				COUNTING_SET_WAS_VISITED(shard, cell_id_in_array, bit_id_in_cell);
 			}
 			res = pthread_rwlock_unlock(&shard->visited_lock);
 			assert(res == 0);
@@ -119,20 +150,20 @@ int count_numbers(uint32_t *arr, int count, struct tree_owner ctx[]) {
 		res = pthread_rwlock_wrlock(&shard->lock);
 		assert(res == 0);
 
-		tmp = rb_tree_find(shard->root, arr[i]);
-		if (tmp != NULL) {
+		exists = COUNTING_VALUE_EXISTS(shard, cell_id_in_array, bit_id_in_cell);
+		if (exists != 0) {
 			res = pthread_rwlock_rdlock(&shard->visited_lock);
 			assert(res == 0);
-			if (RB_TREE_VALUE_WAS_VISITED(tmp, arr[i]) == 0) {
+			if (COUNTING_VALUE_WAS_VISITED(shard, cell_id_in_array, bit_id_in_cell) == 0) {
 				res = pthread_rwlock_unlock(&shard->visited_lock);
 				assert(res == 0);
 
 				res = pthread_rwlock_wrlock(&shard->visited_lock);
 				assert(res == 0);
 
-				if (RB_TREE_VALUE_WAS_VISITED(tmp, arr[i]) == 0) {
+				if (COUNTING_VALUE_WAS_VISITED(shard, cell_id_in_array, bit_id_in_cell) == 0) {
 					shard->repeated_elements++;
-					RB_TREE_SET_WAS_VISITED(tmp, arr[i]);
+					COUNTING_SET_WAS_VISITED(shard, cell_id_in_array, bit_id_in_cell);
 				}
 
 				res = pthread_rwlock_unlock(&shard->visited_lock);
@@ -141,15 +172,14 @@ int count_numbers(uint32_t *arr, int count, struct tree_owner ctx[]) {
 				res = pthread_rwlock_unlock(&shard->visited_lock);
 				assert(res == 0);
 			}
+			// TODO Unlock earlier and test.
 			res = pthread_rwlock_unlock(&shard->lock);
 			assert(res == 0);
 			continue;
 		}
 		
-		tmp = rb_tree_insert_and_fix_violations(shard->root, arr[i]);
-		assert(tmp); // TODO proper error handling
-		shard->tree_size++;
-		shard->root = shard->root ? rb_tree_get_root(shard->root) : tmp;
+		COUNTING_SET_EXISTS(shard, cell_id_in_array, bit_id_in_cell);
+		shard->elements_in_map++;
 
 		res = pthread_rwlock_unlock(&shard->lock);
 		assert(res == 0);
@@ -159,7 +189,7 @@ int count_numbers(uint32_t *arr, int count, struct tree_owner ctx[]) {
 }
 
 uint64_t seen_only_once(struct tree_owner *owner) {
-	return owner->tree_size - owner->repeated_elements;
+	return owner->elements_in_map - owner->repeated_elements;
 }
 
 uint64_t aggregate_unique_numbers(struct tree_owner ctx[], uint64_t shards) {
@@ -167,7 +197,7 @@ uint64_t aggregate_unique_numbers(struct tree_owner ctx[], uint64_t shards) {
 	int res = 0;
 	
 	for (i = 0; i < shards; i++)
-		res += ctx[i].tree_size;
+		res += ctx[i].elements_in_map;
 
 	return res;
 }

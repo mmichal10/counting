@@ -1,5 +1,6 @@
 #include "counting.c"
 #include "unity.h"
+#include <string.h>
 
 static struct tree_owner *find_expected_shard(struct tree_owner ctx[], uint32_t number)
 {
@@ -11,34 +12,6 @@ static struct tree_owner *find_expected_shard(struct tree_owner ctx[], uint32_t 
 	}
 
 	return NULL;
-}
-
-static struct rb_tree_node *insert_value_into_owner(struct tree_owner *owner, uint32_t value)
-{
-	struct rb_tree_node *node = rb_tree_find(owner->root, value);
-
-	if (node == NULL) {
-		node = rb_tree_insert_and_fix_violations(owner->root, value);
-		TEST_ASSERT_NOT_NULL(node);
-
-		owner->tree_size++;
-		owner->root = owner->root ? rb_tree_get_root(owner->root) : node;
-
-		node = rb_tree_find(owner->root, value);
-		TEST_ASSERT_NOT_NULL(node);
-	}
-
-	return node;
-}
-
-static void mark_value_as_repeated(struct tree_owner *owner, struct rb_tree_node *node, uint32_t value)
-{
-	TEST_ASSERT_NOT_NULL(node);
-
-	if (RB_TREE_VALUE_WAS_VISITED(node, value) == 0) {
-		owner->repeated_elements++;
-		RB_TREE_SET_WAS_VISITED(node, value);
-	}
 }
 
 static uint32_t total_unique_numbers(struct tree_owner ctx[])
@@ -95,7 +68,7 @@ void test_prepare_shards_cover_full_range(void)
 	TEST_ASSERT_EQUAL_UINT64(0ul, ctx[0].shard_range_min);
 	TEST_ASSERT_EQUAL_UINT64(COUNTING_MAX_INPUT, ctx[SHARDS - 1].shard_range_max);
 
-	destroy_shards(ctx, SHARDS, SHARD_SIZE);
+	destroy_shards(ctx, SHARDS);
 }
 
 void test_get_shard_returns_correct_shard(void)
@@ -171,14 +144,17 @@ void test_get_shard_returns_correct_shard(void)
 		TEST_ASSERT_EQUAL_PTR(expected_near_last, actual_near_last);
 	}
 
-	destroy_shards(ctx, SHARDS, SHARD_SIZE);
+	destroy_shards(ctx, SHARDS);
 }
 
 void test_countint_1(void)
 {
 	uint32_t i;
+	struct tree_owner ctx[SHARDS] = {};
+	prepare_shards(ctx, SHARDS, SHARD_SIZE);
 
 	uint32_t arr[1000];
+
 	for (i = 0; i < 990; i++) {
 		arr[i] = i % 900;
 	}
@@ -193,18 +169,19 @@ void test_countint_1(void)
 	arr[999] = 8;
 	arr[990] = 0;
 
-	struct tree_owner ctx[16] = {};
-	ctx[0].shard_range_min = 0;
-	ctx[0].shard_range_max = 10000;
-
 	TEST_ASSERT_EQUAL(count_numbers(arr, 1000, ctx), 0);
 
 	TEST_ASSERT_EQUAL(aggregate_unique_numbers(ctx, 16), 900);
 	TEST_ASSERT_EQUAL(aggregate_seen_only_once(ctx, 16), 810);
+
+	destroy_shards(ctx, SHARDS);
 }
 
 void test_countint_2(void)
 {
+	struct tree_owner ctx[SHARDS] = {};
+	prepare_shards(ctx, SHARDS, SHARD_SIZE);
+
 	uint32_t arr[10];
 	arr[0] = 1;
 	arr[1] = 2;
@@ -214,10 +191,6 @@ void test_countint_2(void)
 	arr[5] = 4;
 	arr[6] = 2;
 	arr[7] = 3;
-
-	struct tree_owner ctx[16] = {};
-	ctx[0].shard_range_min = 0;
-	ctx[0].shard_range_max = 10000;
 
 	TEST_ASSERT_EQUAL(count_numbers(arr, 6, ctx), 0);
 
@@ -232,80 +205,69 @@ void test_countint_2(void)
 	TEST_ASSERT_EQUAL(aggregate_unique_numbers(ctx, 16), 4);
 	TEST_ASSERT_EQUAL(aggregate_seen_only_once(ctx, 16), 1);
 
+	destroy_shards(ctx, SHARDS);
 }
 
 void test_tree_api_handles_high_range_duplicates(void)
 {
 	struct tree_owner ctx[SHARDS] = {0};
-	const uint32_t range_start = 0xffffffffu - (1024u * 1024u);
-	const uint32_t range_end = 0xffffffffu;
-	const uint32_t range_count = (1024u * 1024u) + 1u;
-	const uint32_t segment = 16384u;
-	const uint32_t hot_start = 0xffffff00u;
-	const uint32_t expected_seen_once = range_count - (2u * segment);
+	const uint64_t range_start = 0xfffffffflu - (1024lu * 1024lu);
+	const uint64_t range_end = 0xfffffffflu;
+	const uint64_t range_count = (1024lu * 1024lu) + 1lu;
+	const uint64_t segment = 16384lu;
+	const uint64_t expected_seen_once = range_count - (2lu * segment);
+	uint32_t buffer[16384] = {};
 
 	prepare_shards(ctx, SHARDS, SHARD_SIZE);
 
-	for (uint32_t value = range_start;;) {
-		struct tree_owner *owner = get_shard(ctx, value);
-		TEST_ASSERT_NOT_NULL(owner);
-
-		struct rb_tree_node *node = insert_value_into_owner(owner, value);
-		TEST_ASSERT_NOT_NULL(node);
-		TEST_ASSERT_TRUE(RB_TREE_VALUE_EXISTS(node, value));
-
-		if (value == range_end)
-			break;
-
-		++value;
+	for (int i = 0; i < 64; i++) {
+		for (int j = 0; j < (int)segment; j++) {
+			buffer[j] = (uint32_t)(range_start + i*segment + j);
+		}
+		count_numbers(buffer, segment, ctx);
+		memset(buffer, 0, sizeof(uint32_t) * segment);
 	}
 
-	TEST_ASSERT_EQUAL_UINT32(range_count, total_unique_numbers(ctx));
-	TEST_ASSERT_EQUAL_UINT32(range_count, total_seen_once_numbers(ctx));
-	TEST_ASSERT_EQUAL_UINT32(0u, total_repeated_numbers(ctx));
+	buffer[0] = 0xfffffffful;
+	count_numbers(buffer, 1, ctx);
+	memset(buffer, 0, sizeof(uint32_t) * segment);
 
-	for (uint32_t value = range_start; value < range_start + segment; ++value) {
-		struct tree_owner *owner = get_shard(ctx, value);
-		struct rb_tree_node *node = insert_value_into_owner(owner, value);
-		TEST_ASSERT_TRUE(RB_TREE_VALUE_EXISTS(node, value));
-		mark_value_as_repeated(owner, node, value);
-	}
+	TEST_ASSERT_EQUAL_UINT64(range_count, total_unique_numbers(ctx));
+	TEST_ASSERT_EQUAL_UINT64(range_count, total_seen_once_numbers(ctx));
+	TEST_ASSERT_EQUAL_UINT64(0ul, total_repeated_numbers(ctx));
 
-	for (uint32_t value = (range_end - segment) + 1u;;) {
-		struct tree_owner *owner = get_shard(ctx, value);
-		struct rb_tree_node *node = insert_value_into_owner(owner, value);
-		TEST_ASSERT_TRUE(RB_TREE_VALUE_EXISTS(node, value));
-		mark_value_as_repeated(owner, node, value);
+	for (int i = 0; i < (int)segment; i++)
+		buffer[i] = (uint32_t)(range_start + (uint32_t)i);
 
-		if (value == range_end)
-			break;
+	count_numbers(buffer, (int)segment, ctx);
+	memset(buffer, 0, sizeof(uint32_t) * 16384);
 
-		++value;
-	}
+	TEST_ASSERT_EQUAL_UINT64(range_count, total_unique_numbers(ctx));
+	TEST_ASSERT_EQUAL_UINT64(range_count - segment, total_seen_once_numbers(ctx));
+	TEST_ASSERT_EQUAL_UINT64(segment, total_repeated_numbers(ctx));
 
-	TEST_ASSERT_EQUAL_UINT32(range_count, total_unique_numbers(ctx));
-	TEST_ASSERT_EQUAL_UINT32(expected_seen_once, total_seen_once_numbers(ctx));
-	TEST_ASSERT_EQUAL_UINT32(2u * segment, total_repeated_numbers(ctx));
+	for (int i = 0; i < (int)(segment); i++)
+		buffer[i] = (uint32_t)(range_end - segment + (uint32_t)i + 1ul);
+
+	count_numbers(buffer, segment, ctx);
+	memset(buffer, 0, sizeof(uint32_t) * 16384);
+
+	TEST_ASSERT_EQUAL_UINT64(range_count, total_unique_numbers(ctx));
+	TEST_ASSERT_EQUAL_UINT64(expected_seen_once, total_seen_once_numbers(ctx));
+	TEST_ASSERT_EQUAL_UINT64(2lu * segment, total_repeated_numbers(ctx));
+
+	for (int i = 0; i < (int)(segment); i++)
+		buffer[i] = (uint32_t)(range_end - segment + (uint32_t)i + 1ul);
 
 	for (int loop = 0; loop < 10; ++loop) {
-		for (uint32_t value = hot_start;;) {
-			struct tree_owner *owner = get_shard(ctx, value);
-			struct rb_tree_node *node = insert_value_into_owner(owner, value);
-			TEST_ASSERT_TRUE(RB_TREE_VALUE_EXISTS(node, value));
-			mark_value_as_repeated(owner, node, value);
+		count_numbers(buffer, segment, ctx);
 
-			if (value == 0xffffffffu)
-				break;
-
-			++value;
-		}
-
-		TEST_ASSERT_EQUAL_UINT32(range_count, total_unique_numbers(ctx));
-		TEST_ASSERT_EQUAL_UINT32(expected_seen_once, total_seen_once_numbers(ctx));
-		TEST_ASSERT_EQUAL_UINT32(2u * segment, total_repeated_numbers(ctx));
+		TEST_ASSERT_EQUAL_UINT64(range_count, total_unique_numbers(ctx));
+		TEST_ASSERT_EQUAL_UINT64(expected_seen_once, total_seen_once_numbers(ctx));
+		TEST_ASSERT_EQUAL_UINT64(2lu * segment, total_repeated_numbers(ctx));
 	}
 
-	destroy_shards(ctx, SHARDS, SHARD_SIZE);
+	destroy_shards(ctx, SHARDS);
 }
 
 int main(void) {

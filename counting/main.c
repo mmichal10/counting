@@ -4,8 +4,8 @@
 #include <assert.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <stdlib.h>
 
-#include "tree.h"
 #include "counting.h"
 #include "config.h"
 
@@ -122,7 +122,7 @@ end:
 	printf("Unique numbers %lu\n", aggregate_unique_numbers(trees, SHARDS));
 	printf("Seen only once %lu\n", aggregate_seen_only_once(trees, SHARDS));
 
-	destroy_shards(trees, SHARDS, SHARD_SIZE);
+	destroy_shards(trees, SHARDS);
 
 	close(fd);
 }
