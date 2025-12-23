@@ -1,0 +1,112 @@
+#include <stdio.h>
+#include <fcntl.h>
+#include <stdint.h>
+#include <assert.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <stdlib.h>
+
+struct pthread_ctx {
+	uint32_t start_pos;
+	uint32_t end_pos;
+	int file_descryptor;
+	int shard_id;
+};
+
+#define MIN(__A, __B) (__A < __B ? __A : __B)
+
+#define READ_BATCH_SIZE 16384
+#define LOG_INTERVAL (READ_BATCH_SIZE * 256)
+
+void *sharded_counting(void *param) {
+	struct pthread_ctx *ctx = param;
+	uint32_t file_position = 0;
+	int read_bytes;
+	int read_size;
+	uint32_t arr[READ_BATCH_SIZE] = {};
+	uint32_t log_threshold = ctx->start_pos % LOG_INTERVAL;
+
+	printf("Worker %d: STARTED\n", ctx->shard_id);
+	file_position = ctx->start_pos;
+
+	while (1) {
+		read_size = MIN(sizeof(arr), ctx->end_pos - file_position);
+
+		read_bytes = pread(ctx->file_descryptor, arr, read_size, file_position);
+		if (read_bytes < 1)
+			break;
+
+		//printf("Start %u, end %u file pos %u, read size %u, read bytes %u\n",
+			//ctx->start_pos, ctx->end_pos, file_position, read_size, read_bytes);
+
+		file_position += read_bytes;
+
+		if (file_position % LOG_INTERVAL == log_threshold) {
+			printf("Worker %d: processed %.2f%%\n", ctx->shard_id,
+					100 * ((float)(file_position - ctx->start_pos)/(float)(ctx->end_pos - ctx->start_pos)));
+		}
+	}
+	printf("Worker %d: FINISHED\n", ctx->shard_id);
+
+	return NULL;
+}
+
+int main(int argc, char *argv[]) {	
+	int i;
+	int res;
+	uint32_t file_size;
+	uint32_t file_chunk_size;
+
+	pthread_t threads[THREAD_COUNT] = {};
+	struct pthread_ctx *thread_params[THREAD_COUNT] = {};
+
+	if (argc != 2) {
+		printf("Usage: %s <path>\n", argv[0]);
+		return 1;
+	}
+
+	int fd = open(argv[1], O_RDONLY);
+	if (fd == 0) {
+		printf("Failed to open file\n");
+		return 1;
+	}
+
+ 	file_size = lseek(fd, 0L, SEEK_END);
+	file_chunk_size = file_size / THREAD_COUNT;
+
+	//assert(trees[SHARDS - 1].shard_range_max == COUNTING_MAX_INPUT);
+
+	for (i = 0; i < THREAD_COUNT; i++) {
+		thread_params[i] = malloc(sizeof(struct pthread_ctx));
+		if (thread_params[i] == NULL)
+			goto end;
+
+		thread_params[i]->shard_id = i;
+
+		thread_params[i]->start_pos = i * file_chunk_size;
+		if (i == THREAD_COUNT - 1) 
+			thread_params[i]->end_pos = file_size;
+		else
+			thread_params[i]->end_pos = file_chunk_size * (i + 1);
+			
+		thread_params[i]->file_descryptor = fd;
+
+		res = pthread_create(&threads[i], NULL, sharded_counting, thread_params[i]);
+		if (res != 0) {
+			printf("Failed to initialize thread %d\n", i);
+			goto end;
+		}
+	}
+end:
+
+	for (i = 0; i < THREAD_COUNT; i++) {
+		if (threads[i] != 0) {
+			res = pthread_join(threads[i], NULL);
+			assert(res == 0);
+		}
+
+		free(thread_params[i]);
+	}
+
+	close(fd);
+}
