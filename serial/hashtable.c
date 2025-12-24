@@ -58,7 +58,7 @@ struct hash_table_entry* hashtable_lookup(struct hash_table_shard *shard, const 
 	uint32_t shard_size = shard->curr_max_entries;
 
 	for (i = hash_table_id; i < shard_size; i++) {
-		if (shard->entries[i].count == 0)
+		if (shard->entries[i].key[0] == 0)
 			return NULL;
 
 		if (strncmp(key, shard->entries[i].key, MAX_KEY_LEN) == 0)
@@ -66,7 +66,7 @@ struct hash_table_entry* hashtable_lookup(struct hash_table_shard *shard, const 
 	}
 
 	for (i = 0; i < hash_table_id; i++) {
-		if (shard->entries[i].count == 0)
+		if (shard->entries[i].key[0] == 0)
 			return NULL;
 
 		if (strncmp(key, shard->entries[i].key, MAX_KEY_LEN) == 0)
@@ -125,7 +125,7 @@ int hashtable_insert(struct hash_table_shard *shard, const char *key) {
 	assert(strlen(key) < MAX_KEY_LEN);
 
 	for (i = hash_table_id; i < shard_size; i++) {
-		if (shard->entries[i].count > 0) {
+		if (shard->entries[i].key[0] != 0) {
 			if (strncmp(key, shard->entries[i].key, MAX_KEY_LEN) == 0) {
 				assert(shard->entries[i].count < MAX_ENTRIES);
 				shard->entries[i].count++;
@@ -138,7 +138,7 @@ int hashtable_insert(struct hash_table_shard *shard, const char *key) {
 
 	if (i == shard_size) {
 		for (i = 0; i < hash_table_id; i++) {
-			if (shard->entries[i].count > 0) {
+			if (shard->entries[i].key[0] != 0) {
 				if (strncmp(key, shard->entries[i].key, MAX_KEY_LEN) == 0) {
 					assert(shard->entries[i].count < MAX_ENTRIES);
 					shard->entries[i].count++;
