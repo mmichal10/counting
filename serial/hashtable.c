@@ -6,15 +6,16 @@
 #include <assert.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdatomic.h>
 
-#define MAX_KEY_LEN 16UL
-#define MAX_ENTRIES (2ul << 16)
+#define MAX_KEY_LEN 32UL
+#define MAX_ENTRIES (2ul << 32)
 
 typedef uint32_t(*hashing_function_t)(const char *key);
 
 struct hash_table_entry {
 	char key[MAX_KEY_LEN];
-	uint16_t count;
+	atomic_ulong count;
 };
 
 struct hash_table_shard {
@@ -33,7 +34,7 @@ int hashtable_init(struct hash_table_shard *shard, uint32_t range_start,
 		uint32_t range_end, hashing_function_t hashing_function) {
 	uint32_t allocation_size = (range_end - range_start);
 
-	shard->entries = calloc(allocation_size, sizeof(struct hash_table_shard));
+	shard->entries = calloc(allocation_size, sizeof(struct hash_table_entry));
 	if (shard->entries == NULL)
 		return 1;
 
@@ -76,19 +77,35 @@ struct hash_table_entry* hashtable_lookup(struct hash_table_shard *shard, const 
 	return 0;
 }
 
-int hashtable_insert(struct hash_table_shard *shard, const char *key);
+void hashtable_insert_on_resize(struct hash_table_shard *shard, const char *key, uint32_t count) {
+	uint32_t i;
+	uint32_t hash = shard->hashing_function(key);
+	uint32_t hash_table_id = hash_to_id(shard, hash);
+	uint32_t shard_size = shard->curr_max_entries;
+
+	assert(strlen(key) < MAX_KEY_LEN);
+
+	for (i = hash_table_id; i < shard_size; i++) {
+		if (shard->entries[i].key[0] == 0)
+			break;
+	}
+
+	if (i == shard_size) {
+		for (i = 0; i < hash_table_id; i++) {
+			if (shard->entries[i].key[0] == 0)
+				break;
+		}
+	}
+
+	strncpy(shard->entries[i].key, key, MAX_KEY_LEN);
+	atomic_init(&shard->entries[i].count, count);
+	shard->entries_count++;
+}
 
 int hashtable_resize(struct hash_table_shard *shard, uint32_t target_entries_count) {
 	uint32_t i;
 	uint32_t original_entries_count = shard->curr_max_entries;
 	struct hash_table_entry *original_array;
-	int res = 0;
-
-	/*
-	printf("INFO: Resize shard %u - %u. Original size %u. New size %u\n",
-			shard->range_start, shard->range_end, original_entries_count,
-			target_entries_count);
-			*/
 
 	assert(target_entries_count > original_entries_count);
 
@@ -100,12 +117,12 @@ int hashtable_resize(struct hash_table_shard *shard, uint32_t target_entries_cou
 	shard->entries_count = 0;
 
 	for (i = 0; i < original_entries_count; i++) {
-		if (original_array[i].count == 0)
+		if (original_array[i].key[0] == 0)
 			continue;
 
-		//TODO implement internal insert which doesn't try to reallocate
-		res = hashtable_insert(shard, original_array[i].key);
-		assert(res == 0);
+		hashtable_insert_on_resize(shard,
+				original_array[i].key,
+				atomic_load(&original_array[i].count));
 	}
 
 	free(original_array);
@@ -120,15 +137,13 @@ int hashtable_insert(struct hash_table_shard *shard, const char *key) {
 	uint32_t shard_size = shard->curr_max_entries;
 	uint32_t resize_threshold;
 	int res = 0;
-
-	assert(strlen(key) > 0);
 	assert(strlen(key) < MAX_KEY_LEN);
 
 	for (i = hash_table_id; i < shard_size; i++) {
 		if (shard->entries[i].key[0] != 0) {
 			if (strncmp(key, shard->entries[i].key, MAX_KEY_LEN) == 0) {
-				assert(shard->entries[i].count < MAX_ENTRIES);
-				shard->entries[i].count++;
+				assert(atomic_load(&shard->entries[i].count) < MAX_ENTRIES);
+				atomic_fetch_add(&shard->entries[i].count, 1);
 				return 0;
 			}
 			continue;
@@ -140,8 +155,8 @@ int hashtable_insert(struct hash_table_shard *shard, const char *key) {
 		for (i = 0; i < hash_table_id; i++) {
 			if (shard->entries[i].key[0] != 0) {
 				if (strncmp(key, shard->entries[i].key, MAX_KEY_LEN) == 0) {
-					assert(shard->entries[i].count < MAX_ENTRIES);
-					shard->entries[i].count++;
+					assert(atomic_load(&shard->entries[i].count) < MAX_ENTRIES);
+					atomic_fetch_add(&shard->entries[i].count, 1);
 					return 0;
 				}
 				continue;
@@ -151,7 +166,7 @@ int hashtable_insert(struct hash_table_shard *shard, const char *key) {
 	}
 
 	strncpy(shard->entries[i].key, key, MAX_KEY_LEN);
-	shard->entries[i].count = 1;
+	atomic_init(&shard->entries[i].count, 1);
 	shard->entries_count++;
 	resize_threshold = get_resize_threshold(shard);
 
