@@ -51,7 +51,7 @@ void hashtable_deinit(struct hash_table_shard *shard) {
 	shard->entries = NULL;
 }
 
-int hashtable_lookup(struct hash_table_shard *shard, const char *key) {
+struct hash_table_entry* hashtable_lookup(struct hash_table_shard *shard, const char *key) {
 	uint32_t i;
 	uint32_t hash = shard->hashing_function(key);
 	uint32_t hash_table_id = hash_to_id(shard, hash);
@@ -59,18 +59,18 @@ int hashtable_lookup(struct hash_table_shard *shard, const char *key) {
 
 	for (i = hash_table_id; i < shard_size; i++) {
 		if (shard->entries[i].count == 0)
-			return 0;
+			return NULL;
 
 		if (strncmp(key, shard->entries[i].key, MAX_KEY_LEN) == 0)
-			return shard->entries[i].count;
+			return &shard->entries[i];
 	}
 
 	for (i = 0; i < hash_table_id; i++) {
 		if (shard->entries[i].count == 0)
-			return 0;
+			return NULL;
 
 		if (strncmp(key, shard->entries[i].key, MAX_KEY_LEN) == 0)
-			return shard->entries[i].count;
+			return &shard->entries[i];
 	}
 
 	return 0;
