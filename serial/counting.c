@@ -10,10 +10,6 @@
 #include "parse_json.c"
 #include "hash.c"
 
-#define SHARD_COUNT 4ul
-#define MAX_HASHES (2ul << 28)
-// (2 << 28) * 4 bytes == 1G of preallocated memory
-
 struct counting_ctx {
 	uint32_t shards_count;
 	struct hash_table_shard *shards;
@@ -120,23 +116,31 @@ insert_new_element:
 	return res;
 }
 
-int counting_models(struct counting_ctx *ctx, char* buffer, uint32_t remaining_buffer_len) {
+uint32_t counting_models(struct counting_ctx *ctx, char* buffer, uint32_t remaining_buffer_len) {
 	int res;
+	uint32_t processed_bytes = 0;
 	char* curr_model_start_pos;
 	char* curr_model_end_pos;
 	char* curr_json_entry_begining;
 
+	//assert(buffer[remaining_buffer_len - 1] == '}');
+
 	while (remaining_buffer_len > 0) {
 		curr_json_entry_begining = memchr(buffer, '{', remaining_buffer_len);
-		if (curr_json_entry_begining == NULL)
+		if (curr_json_entry_begining == NULL) {
+			processed_bytes += remaining_buffer_len;
 			break;
+		}
 
+		processed_bytes += (curr_json_entry_begining - buffer);
 		remaining_buffer_len -= (curr_json_entry_begining - buffer);
 		buffer = curr_json_entry_begining;
 
 		curr_model_start_pos = json_get_next_model(buffer, remaining_buffer_len);
-		if (*curr_model_start_pos == '}')
+		if (*curr_model_start_pos == '}') {
+			processed_bytes += remaining_buffer_len;
 			break;
+		}
 
 		curr_model_end_pos = memchr(curr_model_start_pos, '\"', remaining_buffer_len);
 		assert(curr_model_end_pos != NULL); // The input must be valid JSON
@@ -147,12 +151,13 @@ int counting_models(struct counting_ctx *ctx, char* buffer, uint32_t remaining_b
 
 		curr_model_end_pos++;
 
+		processed_bytes += (curr_model_end_pos - buffer);
 		remaining_buffer_len -= (curr_model_end_pos - buffer);
 
 		buffer = curr_model_end_pos;
 	}
 
-	return res;
+	return processed_bytes;
 }
 
 #endif
