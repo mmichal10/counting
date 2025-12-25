@@ -48,10 +48,13 @@ CFLAGS += -g
 
 TARGET_BASE1=test_hashtable
 TARGET_BASE2=test_json
+TARGET_BASE3=test_parsing
 TARGET1 = $(TARGET_BASE1)$(TARGET_EXTENSION)
 TARGET2 = $(TARGET_BASE2)$(TARGET_EXTENSION)
+TARGET3 = $(TARGET_BASE3)$(TARGET_EXTENSION)
 SRC_FILES1=$(UNITY_ROOT)/src/unity.c test_serial.c 
 SRC_FILES2=$(UNITY_ROOT)/src/unity.c test_json.c
+SRC_FILES3=$(UNITY_ROOT)/src/unity.c test_parsing.c
 INC_DIRS=-I$(PROJECT_SRC) -I$(UNITY_ROOT)/src
 SYMBOLS=
 
@@ -60,8 +63,10 @@ all: clean default
 default: $(SRC_FILES1)
 	$(C_COMPILER) $(CFLAGS) $(INC_DIRS) $(SYMBOLS) $(SRC_FILES1) -o $(TARGET1)
 	$(C_COMPILER) $(CFLAGS) $(INC_DIRS) $(SYMBOLS) $(SRC_FILES2) -o $(TARGET2) -D_POSIX_C_SOURCE=200809L -D_GNU_SOURCE
-	- ./$(TARGET1)
-	- ./$(TARGET2)
+	$(C_COMPILER) $(CFLAGS) $(INC_DIRS) $(SYMBOLS) $(SRC_FILES3) -o $(TARGET3) -D_POSIX_C_SOURCE=200809L -D_GNU_SOURCE
+	- valgrind ./$(TARGET1)
+	- valgrind ./$(TARGET2)
+	- valgrind ./$(TARGET3)
 
 #test/test_runners/TestProductionCode_Runner.c: test/TestProductionCode.c
 #	ruby $(UNITY_ROOT)/auto/generate_test_runner.rb test/TestProductionCode.c  test/test_runners/TestProductionCode_Runner.c
@@ -69,7 +74,7 @@ default: $(SRC_FILES1)
 #	ruby $(UNITY_ROOT)/auto/generate_test_runner.rb test/TestProductionCode2.c test/test_runners/TestProductionCode2_Runner.c
 
 clean:
-	$(CLEANUP) $(TARGET1)# $(TARGET2)
+	$(CLEANUP) $(TARGET1) $(TARGET2) $(TARGET3)
 
 ci: CFLAGS += -Werror
 ci: default
