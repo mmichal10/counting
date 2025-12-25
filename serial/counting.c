@@ -36,14 +36,14 @@ int counting_init(struct counting_ctx *ctx, uint32_t shards_count, uint32_t max_
 
 	if (shards_count > 1) {
 		for (i = 0; i < shards_count - 1; i++, init_shards_counter++) {
-			ret = hashtable_init(&ctx->shards[i], i*shard_range, (i + 1) * shard_range, FNV);
+			ret = hashtable_init(&ctx->shards[i], i*shard_range, (i + 1) * shard_range);
 			if (ret != 0)
 				goto err;
 		}
 	}
 
 	i = shards_count - 1;
-	ret = hashtable_init(&ctx->shards[i], i*shard_range, max_hashes, FNV);
+	ret = hashtable_init(&ctx->shards[i], i*shard_range, max_hashes);
 	if (ret != 0)
 		goto err;
 
@@ -93,7 +93,7 @@ int counting_insert_model(struct counting_ctx *ctx, char* model) {
 	res = pthread_rwlock_rdlock(&ctx->locks[shard_id]);
 	assert(res == 0);
 
-	entry = hashtable_lookup(&ctx->shards[shard_id], model);
+	entry = hashtable_lookup(&ctx->shards[shard_id], model, hash);
 	if (!entry) {
 		res = pthread_rwlock_unlock(&ctx->locks[shard_id]);
 		assert(res == 0);
@@ -111,7 +111,7 @@ insert_new_element:
 	res = pthread_rwlock_wrlock(&ctx->locks[shard_id]);
 	assert(res == 0);
 
-	res = hashtable_insert(&ctx->shards[shard_id], model);
+	res = hashtable_insert(&ctx->shards[shard_id], model, hash, FNV);
 	assert(res == 0); // TODO sometimes it's recoverable that the allocation failed 
 
 	res = pthread_rwlock_unlock(&ctx->locks[shard_id]);

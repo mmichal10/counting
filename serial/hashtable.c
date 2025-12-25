@@ -8,10 +8,10 @@
 #include <stdio.h>
 #include <stdatomic.h>
 
+#include "hash.c"
+
 #define MAX_KEY_LEN 32UL
 #define MAX_ENTRIES (2ul << 32)
-
-typedef uint32_t(*hashing_function_t)(const char *key);
 
 struct hash_table_entry {
 	char key[MAX_KEY_LEN];
@@ -23,15 +23,13 @@ struct hash_table_shard {
 	uint32_t range_end;
 	uint32_t entries_count;
 	uint32_t curr_max_entries;
-	hashing_function_t hashing_function;
 	struct hash_table_entry *entries;
 };
 
 #define hash_to_id(__shard, __hash) (__hash % __shard->curr_max_entries)
 #define get_resize_threshold(__shard) (__shard->curr_max_entries - (__shard->curr_max_entries >> 2))
 
-int hashtable_init(struct hash_table_shard *shard, uint32_t range_start,
-		uint32_t range_end, hashing_function_t hashing_function) {
+int hashtable_init(struct hash_table_shard *shard, uint32_t range_start, uint32_t range_end) {
 	uint32_t allocation_size = (range_end - range_start);
 
 	shard->entries = calloc(allocation_size, sizeof(struct hash_table_entry));
@@ -42,7 +40,6 @@ int hashtable_init(struct hash_table_shard *shard, uint32_t range_start,
 	shard->range_end = range_end;
 	shard->entries_count = 0;
 	shard->curr_max_entries = allocation_size;
-	shard->hashing_function = hashing_function;
 
 	return 0;
 }
@@ -52,9 +49,8 @@ void hashtable_deinit(struct hash_table_shard *shard) {
 	shard->entries = NULL;
 }
 
-struct hash_table_entry* hashtable_lookup(struct hash_table_shard *shard, const char *key) {
+struct hash_table_entry* hashtable_lookup(struct hash_table_shard *shard, const char *key, uint32_t hash) {
 	uint32_t i;
-	uint32_t hash = shard->hashing_function(key);
 	uint32_t hash_table_id = hash_to_id(shard, hash);
 	uint32_t shard_size = shard->curr_max_entries;
 
@@ -77,9 +73,9 @@ struct hash_table_entry* hashtable_lookup(struct hash_table_shard *shard, const 
 	return 0;
 }
 
-void hashtable_insert_on_resize(struct hash_table_shard *shard, const char *key, uint32_t count) {
+void hashtable_insert_on_resize(struct hash_table_shard *shard, const char *key, uint32_t count,
+		uint32_t hash) {
 	uint32_t i;
-	uint32_t hash = shard->hashing_function(key);
 	uint32_t hash_table_id = hash_to_id(shard, hash);
 	uint32_t shard_size = shard->curr_max_entries;
 
@@ -102,7 +98,8 @@ void hashtable_insert_on_resize(struct hash_table_shard *shard, const char *key,
 	shard->entries_count++;
 }
 
-int hashtable_resize(struct hash_table_shard *shard, uint32_t target_entries_count) {
+int hashtable_resize(struct hash_table_shard *shard, uint32_t target_entries_count,
+		hashing_function_t hashing_function) {
 	uint32_t i;
 	uint32_t original_entries_count = shard->curr_max_entries;
 	struct hash_table_entry *original_array;
@@ -122,7 +119,8 @@ int hashtable_resize(struct hash_table_shard *shard, uint32_t target_entries_cou
 
 		hashtable_insert_on_resize(shard,
 				original_array[i].key,
-				atomic_load(&original_array[i].count));
+				atomic_load(&original_array[i].count),
+				hashing_function(original_array[i].key));
 	}
 
 	free(original_array);
@@ -130,9 +128,9 @@ int hashtable_resize(struct hash_table_shard *shard, uint32_t target_entries_cou
 	return 0;
 }
 
-int hashtable_insert(struct hash_table_shard *shard, const char *key) {
+int hashtable_insert(struct hash_table_shard *shard, const char *key, uint32_t hash,
+		hashing_function_t hashing_function) {
 	uint32_t i;
-	uint32_t hash = shard->hashing_function(key);
 	uint32_t hash_table_id = hash_to_id(shard, hash);
 	uint32_t shard_size = shard->curr_max_entries;
 	uint32_t resize_threshold;
@@ -171,7 +169,7 @@ int hashtable_insert(struct hash_table_shard *shard, const char *key) {
 	resize_threshold = get_resize_threshold(shard);
 
 	if (shard->entries_count > resize_threshold)
-		res = hashtable_resize(shard, shard->curr_max_entries * 2);
+		res = hashtable_resize(shard, shard->curr_max_entries * 2, hashing_function);
 
 	return res;
 }

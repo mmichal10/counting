@@ -25,16 +25,17 @@ void test_hashtable_basic_insert(void) {
 	const char *keys[] = {"asdf", "zxvc", "qwer"};
 	int ret;
 
-	ret = hashtable_init(&hash_table, range_begin,  range_end, FNV);
+	ret = hashtable_init(&hash_table, range_begin,  range_end);
 	TEST_ASSERT_EQUAL(0, ret);
 
 	for (i = 0; i < 3; i++) {
-		ret = hashtable_insert(&hash_table, keys[i]);
+		
+		ret = hashtable_insert(&hash_table, keys[i], FNV(keys[i]), FNV);
 		TEST_ASSERT_EQUAL(0, ret);
 	}
 
 	for (i = 0; i < 3; i++) {
-		entry = hashtable_lookup(&hash_table, keys[i]);
+		entry = hashtable_lookup(&hash_table, keys[i], FNV(keys[i]));
 		TEST_ASSERT_EQUAL(1, entry_count_test_helper(entry));
 	}
 		
@@ -50,16 +51,16 @@ void test_hashtable_insert_resize(void) {
 	struct hash_table_entry *entry;
 	int ret;
 
-	ret = hashtable_init(&hash_table, range_begin,  range_end, FNV);
+	ret = hashtable_init(&hash_table, range_begin,  range_end);
 	TEST_ASSERT_EQUAL(0, ret);
 
 	for (i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
-		ret = hashtable_insert(&hash_table, keys[i]);
+		ret = hashtable_insert(&hash_table, keys[i], FNV(keys[i]), FNV);
 		TEST_ASSERT_EQUAL(0, ret);
 	}
 
 	for (i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
-		entry = hashtable_lookup(&hash_table, keys[i]);
+		entry = hashtable_lookup(&hash_table, keys[i], FNV(keys[i]));
 		TEST_ASSERT_EQUAL(1, entry_count_test_helper(entry));
 	}
 		
@@ -75,26 +76,26 @@ void test_hashtable_insert_the_same_key_after_resize(void) {
 	const char *keys[] = {"asdf", "zxvc", "qwer", "qazx", "uiop", "hjkl", "vbnm", "sdfg", "wert", "xcvb", "sdaf"};
 	int ret;
 
-	ret = hashtable_init(&hash_table, range_begin,  range_end, FNV);
+	ret = hashtable_init(&hash_table, range_begin,  range_end);
 	TEST_ASSERT_EQUAL(0, ret);
 
 	for (i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
-		ret = hashtable_insert(&hash_table, keys[i]);
+		ret = hashtable_insert(&hash_table, keys[i], FNV(keys[i]), FNV);
 		TEST_ASSERT_EQUAL(0, ret);
 	}
 
 	for (i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
-		entry = hashtable_lookup(&hash_table, keys[i]);
+		entry = hashtable_lookup(&hash_table, keys[i], FNV(keys[i]));
 		TEST_ASSERT_EQUAL(1, entry_count_test_helper(entry));
 	}
 
 	for (i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
-		ret = hashtable_insert(&hash_table, keys[i]);
+		ret = hashtable_insert(&hash_table, keys[i], FNV(keys[i]), FNV);
 		TEST_ASSERT_EQUAL(0, ret);
 	}
 
 	for (i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
-		entry = hashtable_lookup(&hash_table, keys[i]);
+		entry = hashtable_lookup(&hash_table, keys[i], FNV(keys[i]));
 		TEST_ASSERT_EQUAL(2, entry_count_test_helper(entry));
 	}
 		
@@ -112,21 +113,21 @@ void test_hashtable_lookup_missing_keys(void) {
 		"asdfx", "zxvcx", "qwerx", "qazxx", "uiopx", "hjklx", "vbnmx", "sdfgx", "wertx", "xcvbx", "sdafx"};
 	int ret;
 
-	ret = hashtable_init(&hash_table, range_begin,  range_end, FNV);
+	ret = hashtable_init(&hash_table, range_begin,  range_end);
 	TEST_ASSERT_EQUAL(0, ret);
 
 	for (i = 0; i < sizeof(valid_keys) / sizeof(valid_keys[0]); i++) {
-		ret = hashtable_insert(&hash_table, valid_keys[i]);
+		ret = hashtable_insert(&hash_table, valid_keys[i], FNV(valid_keys[i]), FNV);
 		TEST_ASSERT_EQUAL(0, ret);
 	}
 
 	for (i = 0; i < sizeof(valid_keys) / sizeof(valid_keys[0]); i++) {
-		entry = hashtable_lookup(&hash_table, valid_keys[i]);
+		entry = hashtable_lookup(&hash_table, valid_keys[i], FNV(valid_keys[i]));
 		TEST_ASSERT_EQUAL(1, entry_count_test_helper(entry));
 	}
 
 	for (i = 0; i < sizeof(invalid_keys) / sizeof(invalid_keys[0]); i++) {
-		entry = hashtable_lookup(&hash_table, invalid_keys[i]);
+		entry = hashtable_lookup(&hash_table, invalid_keys[i], FNV(invalid_keys[i]));
 		TEST_ASSERT_NULL(entry);
 	}
 		
@@ -143,18 +144,18 @@ void test_hashtable_insert_multiple_times(void) {
 	const char *valid_keys[] = {"asdf", "zxvc", "qwer", "qazx", "uiop", "hjkl", "vbnm", "sdfg", "wert", "xcvb", "sdaf"};
 	int ret;
 
-	ret = hashtable_init(&hash_table, range_begin,  range_end, FNV);
+	ret = hashtable_init(&hash_table, range_begin,  range_end);
 	TEST_ASSERT_EQUAL(0, ret);
 
 	for (j = 0; j < insert_repetitions; j++) {
 		for (i = 0; i < sizeof(valid_keys) / sizeof(valid_keys[0]); i++) {
-			ret = hashtable_insert(&hash_table, valid_keys[i]);
+			ret = hashtable_insert(&hash_table, valid_keys[i], FNV(valid_keys[i]), FNV);
 			TEST_ASSERT_EQUAL(0, ret);
 		}
 	}
 
 	for (i = 0; i < sizeof(valid_keys) / sizeof(valid_keys[0]); i++) {
-		entry = hashtable_lookup(&hash_table, valid_keys[i]);
+		entry = hashtable_lookup(&hash_table, valid_keys[i], FNV(valid_keys[i]));
 		TEST_ASSERT_EQUAL(insert_repetitions, entry_count_test_helper(entry));
 	}
 
@@ -172,27 +173,27 @@ void test_hashtable_multiple_insert_and_resize(void) {
 	const char *valid_keys[] = {"asdf", "zxvc", "qwer", "qazx", "uiop", "hjkl", "vbnm", "sdfg", "wert", "xcvb", "sdaf"};
 	int ret;
 
-	ret = hashtable_init(&hash_table, range_begin,  range_end, FNV);
+	ret = hashtable_init(&hash_table, range_begin,  range_end);
 	TEST_ASSERT_EQUAL(0, ret);
 
 	for (j = 0; j < insert_repetitions; j++) {
-		ret = hashtable_insert(&hash_table, multiple_inserted_key);
+		ret = hashtable_insert(&hash_table, multiple_inserted_key, FNV(multiple_inserted_key), FNV);
 		TEST_ASSERT_EQUAL(0, ret);
 	}
 
 	for (j = 0; j < insert_repetitions; j++) {
 		for (i = 0; i < sizeof(valid_keys) / sizeof(valid_keys[0]); i++) {
-			ret = hashtable_insert(&hash_table, valid_keys[i]);
+			ret = hashtable_insert(&hash_table, valid_keys[i], FNV(valid_keys[i]), FNV);
 			TEST_ASSERT_EQUAL(0, ret);
 
-			entry = hashtable_lookup(&hash_table, multiple_inserted_key);
+			entry = hashtable_lookup(&hash_table, multiple_inserted_key, FNV(multiple_inserted_key));
 			TEST_ASSERT_EQUAL(insert_repetitions, entry_count_test_helper(entry));
 		}
 	}
 
 
 	for (i = 0; i < sizeof(valid_keys) / sizeof(valid_keys[0]); i++) {
-		entry = hashtable_lookup(&hash_table, valid_keys[i]);
+		entry = hashtable_lookup(&hash_table, valid_keys[i], FNV(valid_keys[i]));
 		TEST_ASSERT_EQUAL(insert_repetitions, entry_count_test_helper(entry));
 	}
 

@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+typedef uint32_t(*hashing_function_t)(const char *key);
+
 uint32_t FNV(const char* key)
 {
     uint32_t h = 2166136261UL;
