@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "counting.h"
 #include "config.h"
@@ -36,6 +37,9 @@ void *sharded_counting(void *param) {
 
 	while (1) {
 		read_size = MIN(sizeof(arr), ctx->end_pos - file_position);
+
+		if (read_size < sizeof(arr))
+			memset(arr, 0, sizeof(arr));
 
 		read_bytes = pread(ctx->file_descryptor, arr, read_size, file_position);
 		if (read_bytes < 1)
