@@ -82,7 +82,10 @@ char *json_get_next_model(char *src_buffer, uint32_t src_buffer_size) {
 	char *uuid_key;
 	char *uuid_val;
 
-	assert(src_buffer[0] == '{');
+	if (src_buffer[0] != '{') {
+		printf("%s %u: Parsing failed\n", __FILE__, __LINE__);
+		return NULL;
+	}
 	uuid_key = memmem(src_buffer, src_buffer_size, JSON_MODEL_KEY, strlen(JSON_MODEL_KEY));
 
 	if (!uuid_key) {

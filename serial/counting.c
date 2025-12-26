@@ -24,9 +24,11 @@ int counting_init(struct counting_ctx *ctx, uint32_t shards_count, uint32_t max_
 	uint32_t shard_range = max_hashes / shards_count;
 
 	ctx->shards = calloc(shards_count, sizeof(struct hash_table_shard));
-	assert(ctx->shards);
+	if (!ctx->shards)
+		return 1;
 	ctx->locks = calloc(shards_count, sizeof(pthread_rwlock_t));
-	assert(ctx->locks);
+	if (!ctx->locks)
+		goto free_shards;
 
 	ctx->shards_count = shards_count;
 
@@ -59,8 +61,9 @@ err:
 	for (i = 0; i < init_locks_counter; i++)
 			assert(pthread_rwlock_destroy(&ctx->locks[i]) == 0);
 
-	free(ctx->shards);
 	free(ctx->locks);
+free_shards:
+	free(ctx->shards);
 
 	return 1;
 }
@@ -73,8 +76,8 @@ void counting_deinit(struct counting_ctx *ctx) {
 		assert(pthread_rwlock_destroy(ctx[i].locks) == 0);
 	}
 
-	free(ctx->shards);
 	free(ctx->locks);
+	free(ctx->shards);
 }
 
 int counting_insert_model(struct counting_ctx *ctx, char* model) {
@@ -116,48 +119,47 @@ insert_new_element:
 	return res;
 }
 
-uint32_t counting_models(struct counting_ctx *ctx, char* buffer, uint32_t remaining_buffer_len) {
+int counting_models(struct counting_ctx *ctx, char* buffer, uint32_t remaining_buffer_len) {
 	int res;
-	uint32_t processed_bytes = 0;
 	char* curr_model_start_pos;
 	char* curr_model_end_pos;
 	char* curr_json_entry_begining;
 
-	//assert(buffer[remaining_buffer_len - 1] == '}');
-
 	while (remaining_buffer_len > 0) {
 		curr_json_entry_begining = memchr(buffer, '{', remaining_buffer_len);
-		if (curr_json_entry_begining == NULL) {
-			processed_bytes += remaining_buffer_len;
+		if (curr_json_entry_begining == NULL)
 			break;
-		}
 
-		processed_bytes += (curr_json_entry_begining - buffer);
 		remaining_buffer_len -= (curr_json_entry_begining - buffer);
 		buffer = curr_json_entry_begining;
 
 		curr_model_start_pos = json_get_next_model(buffer, remaining_buffer_len);
-		if (*curr_model_start_pos == '}') {
-			processed_bytes += remaining_buffer_len;
+		if (curr_model_start_pos == NULL) {
+			printf("Malformed JSON input\n");
+			return 1;
+		} else if (*curr_model_start_pos == '}') {
 			break;
 		}
 
 		curr_model_end_pos = memchr(curr_model_start_pos, '\"', remaining_buffer_len);
-		assert(curr_model_end_pos != NULL); // The input must be valid JSON
+		if (curr_model_end_pos == NULL) {
+			printf("Malformed JSON input\n");
+			return 1;
+		}
 
 		*curr_model_end_pos = 0;
 		res = counting_insert_model(ctx, curr_model_start_pos);
-		assert(res == 0);
+		if (res)
+			return 1;
 
 		curr_model_end_pos++;
 
-		processed_bytes += (curr_model_end_pos - buffer);
 		remaining_buffer_len -= (curr_model_end_pos - buffer);
 
 		buffer = curr_model_end_pos;
 	}
 
-	return processed_bytes;
+	return 0;
 }
 
 #endif

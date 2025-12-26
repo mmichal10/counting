@@ -10,8 +10,8 @@
 
 #include "hash.c"
 
-#define MAX_KEY_LEN 32UL
-#define MAX_ENTRIES (2ul << 32)
+#define MAX_KEY_LEN 16UL
+#define ENTRY_MAX_OCCURANCES (2ul << 32) // HO
 
 struct hash_table_entry {
 	char key[MAX_KEY_LEN];
@@ -28,6 +28,7 @@ struct hash_table_shard {
 
 #define hash_to_id(__shard, __hash) (__hash % __shard->curr_max_entries)
 #define get_resize_threshold(__shard) (__shard->curr_max_entries - (__shard->curr_max_entries >> 2))
+#define get_resize_critical_threshold(__shard) (__shard->curr_max_entries - (__shard->curr_max_entries >> 4))
 
 int hashtable_init(struct hash_table_shard *shard, uint32_t range_start, uint32_t range_end) {
 	uint32_t allocation_size = (range_end - range_start);
@@ -108,7 +109,10 @@ int hashtable_resize(struct hash_table_shard *shard, uint32_t target_entries_cou
 
 	original_array = shard->entries;
 	shard->entries = calloc(target_entries_count, sizeof(struct hash_table_entry));
-	assert(shard->entries);
+	if (!shard->entries) {
+		shard->entries = original_array;
+		return 1;
+	}
 
 	shard->curr_max_entries = target_entries_count;
 	shard->entries_count = 0;
@@ -135,12 +139,19 @@ int hashtable_insert(struct hash_table_shard *shard, const char *key, uint32_t h
 	uint32_t shard_size = shard->curr_max_entries;
 	uint32_t resize_threshold;
 	int res = 0;
-	assert(strlen(key) < MAX_KEY_LEN);
+	
+	if (strlen(key) >= MAX_KEY_LEN) {
+		printf("ERROR: Key %s too long!\n", key);
+		return 1;
+	}
 
 	for (i = hash_table_id; i < shard_size; i++) {
 		if (shard->entries[i].key[0] != 0) {
 			if (strncmp(key, shard->entries[i].key, MAX_KEY_LEN) == 0) {
-				assert(atomic_load(&shard->entries[i].count) < MAX_ENTRIES);
+				if (atomic_load(&shard->entries[i].count) == ENTRY_MAX_OCCURANCES) {
+					printf("ERROR: Key %s has reached the max possible occurances\n", shard->entries[i].key);
+					return 1;
+				}
 				atomic_fetch_add(&shard->entries[i].count, 1);
 				return 0;
 			}
@@ -153,7 +164,10 @@ int hashtable_insert(struct hash_table_shard *shard, const char *key, uint32_t h
 		for (i = 0; i < hash_table_id; i++) {
 			if (shard->entries[i].key[0] != 0) {
 				if (strncmp(key, shard->entries[i].key, MAX_KEY_LEN) == 0) {
-					assert(atomic_load(&shard->entries[i].count) < MAX_ENTRIES);
+					if (atomic_load(&shard->entries[i].count) == ENTRY_MAX_OCCURANCES) {
+						printf("ERROR: Key %s has reached the max possible occurances\n", shard->entries[i].key);
+						return 1;
+					}
 					atomic_fetch_add(&shard->entries[i].count, 1);
 					return 0;
 				}
@@ -168,8 +182,15 @@ int hashtable_insert(struct hash_table_shard *shard, const char *key, uint32_t h
 	shard->entries_count++;
 	resize_threshold = get_resize_threshold(shard);
 
-	if (shard->entries_count > resize_threshold)
+	if (shard->entries_count > resize_threshold) {
 		res = hashtable_resize(shard, shard->curr_max_entries * 2, hashing_function);
+		if (res && shard->entries_count > get_resize_critical_threshold(shard)) {
+			printf("WARNING: Growing hashtable shard failed, but it continues to operate\n");
+			res = 0;
+		} else if (res) {
+			printf("ERROR: Growing hashtable shard failed\n");
+		}
+	}
 
 	return res;
 }

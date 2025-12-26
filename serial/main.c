@@ -14,26 +14,25 @@ struct pthread_ctx {
 	int file_descryptor;
 	int shard_id;
 	struct counting_ctx *hash_table; 
+	atomic_ulong *error;
 };
 
 #define MIN(__A, __B) (__A < __B ? __A : __B)
 
-#define READ_BATCH_SIZE 16384
-#define LOG_INTERVAL (READ_BATCH_SIZE * READ_BATCH_SIZE)
+#define READ_BATCH_SIZE 16384UL
+#define LOG_INTERVAL (READ_BATCH_SIZE * READ_BATCH_SIZE * 8UL)
 
 #define THREAD_COUNT 2ULL
 
 #define SHARD_COUNT 4ul
 #define MAX_HASHES (2ul << 8)
-// (2 << 28) * 4 bytes == 1G of preallocated memory
-
 
 void *sharded_counting(void *param) {
 	struct pthread_ctx *ctx = param;
 	uint64_t file_position = 0;
 	int read_bytes;
 	int read_size;
-	uint64_t processed_bytes;
+	int ret = 0;
 	char arr[READ_BATCH_SIZE] = {};
 	char* last_entry_end;
 	char* next_entry_begin;
@@ -42,9 +41,7 @@ void *sharded_counting(void *param) {
 	printf("Worker %d: STARTED\n", ctx->shard_id);
 	file_position = ctx->start_pos;
 
-	printf("Worker %d: start %lu end %lu\n", ctx->shard_id, ctx->start_pos, ctx->end_pos);
-
-	while (1) {
+	while (atomic_load(ctx->error) == 0) {
 		read_size = MIN(sizeof(arr), ctx->end_pos - file_position);
 
 		if (read_size < sizeof(arr))
@@ -66,7 +63,10 @@ void *sharded_counting(void *param) {
 		if (read_bytes < 1)
 			break;
 
-		processed_bytes = counting_models(ctx->hash_table, arr, read_bytes);
+		ret = counting_models(ctx->hash_table, arr, read_bytes);
+		if (ret)
+			break;
+
 		if (next_entry_begin && last_entry_end && next_entry_begin > last_entry_end)
 			read_bytes = next_entry_begin - arr;
 
@@ -77,8 +77,16 @@ void *sharded_counting(void *param) {
 					100 * ((float)(file_position - ctx->start_pos)/(float)(ctx->end_pos - ctx->start_pos)));
 			log_threshold += LOG_INTERVAL;
 		}
+
 	}
-	printf("Worker %d: FINISHED\n", ctx->shard_id);
+	if (ret) {
+		printf("Worker %d error. Terminating\n", ctx->shard_id);
+		atomic_store(ctx->error, 1);
+	} else if (atomic_load(ctx->error) > 0) {
+		printf("Worker %d recieved stop signal. Terminating\n", ctx->shard_id);
+	} else {
+		printf("Worker %d: FINISHED\n", ctx->shard_id);
+	}
 
 	return NULL;
 }
@@ -93,6 +101,7 @@ int main(int argc, char *argv[]) {
 	struct pthread_ctx *thread_params[THREAD_COUNT] = {};
 	uint64_t file_shards_beginings[THREAD_COUNT];
 	uint64_t file_shards_endings[THREAD_COUNT];
+	atomic_ulong threads_error;
 
 	if (argc != 2) {
 		printf("Usage: %s <path>\n", argv[0]);
@@ -117,6 +126,8 @@ int main(int argc, char *argv[]) {
 
 	assert(ctx.shards[SHARD_COUNT - 1].range_end == MAX_HASHES);
 
+	atomic_init(&threads_error, 0);
+
 	json_shard_the_file(fd, file_shards_beginings, file_shards_endings, THREAD_COUNT);
 
 	for (i = 0; i < THREAD_COUNT; i++) {
@@ -129,6 +140,7 @@ int main(int argc, char *argv[]) {
 		thread_params[i]->shard_id = i;
 		thread_params[i]->start_pos = file_shards_beginings[i];
 		thread_params[i]->end_pos = file_shards_endings[i];
+		thread_params[i]->error = &threads_error;
 
 		res = pthread_create(&threads[i], NULL, sharded_counting, thread_params[i]);
 		if (res != 0) {
@@ -148,17 +160,22 @@ end:
 		free(thread_params[i]);
 	}
 
-	for (i = 0; i < SHARD_COUNT; i++) {
-		struct hash_table_shard *shard = &ctx.shards[i];
-		for (j = 0; j < shard->curr_max_entries; j++) {
-			struct hash_table_entry* entry = &shard->entries[j];
-			if (entry->key[0] == 0)
-				continue;
+	if (atomic_load(&threads_error) == 0) {
+		printf("Occurances\tModel\n");
+		for (i = 0; i < SHARD_COUNT; i++) {
+			struct hash_table_shard *shard = &ctx.shards[i];
+			for (j = 0; j < shard->curr_max_entries; j++) {
+				struct hash_table_entry* entry = &shard->entries[j];
+				if (entry->key[0] == 0)
+					continue;
 
-			printf("%lu %s\n",
-					atomic_load(&entry->count),
-					shard->entries[j].key);
+				printf("%lu\t\t%s\n",
+						atomic_load(&entry->count),
+						shard->entries[j].key);
+			}
 		}
+	} else {
+		printf("Failed to parse the input file\n");
 	}
 
 	counting_deinit(&ctx);
