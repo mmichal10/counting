@@ -1,0 +1,17 @@
+
+
+Occurances                Model
+
+33327094                123456789
+33328584                broken
+33337292                HGST3T
+33329611                SCSI3HD
+33328579                SSDF1
+33345174                SSDLP2
+33338513                DRV1
+33333959                DSD07461
+1                       MODEL
+33337967                HGST8T
+33332954                RDV2
+33332531                HGST2048T
+33327742                SSDDC1
