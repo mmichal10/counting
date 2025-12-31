@@ -11,7 +11,7 @@
 #include "hash.c"
 
 #define MAX_KEY_LEN 16UL
-#define ENTRY_MAX_OCCURANCES (2ul << 32) // HO
+#define ENTRY_MAX_OCCURANCES (2ul << 32)
 
 struct hash_table_entry {
 	char key[MAX_KEY_LEN];
