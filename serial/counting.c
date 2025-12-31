@@ -73,7 +73,7 @@ void counting_deinit(struct counting_ctx *ctx) {
 
 	for (i = 0; i < ctx->shards_count; i++) {
 		hashtable_deinit(&ctx->shards[i]);
-		assert(pthread_rwlock_destroy(ctx[i].locks) == 0);
+		assert(pthread_rwlock_destroy(&ctx->locks[i]) == 0);
 	}
 
 	free(ctx->locks);
@@ -81,7 +81,7 @@ void counting_deinit(struct counting_ctx *ctx) {
 }
 
 int counting_insert_model(struct counting_ctx *ctx, char* model) {
-	int res;
+	int res, insert_res;
 	uint32_t hash;
 	uint32_t shard_id;
 	struct hash_table_entry* entry;
@@ -110,13 +110,12 @@ insert_new_element:
 	res = pthread_rwlock_wrlock(&ctx->locks[shard_id]);
 	assert(res == 0);
 
-	res = hashtable_insert(&ctx->shards[shard_id], model, hash, FNV);
-	assert(res == 0); // TODO sometimes it's recoverable that the allocation failed 
+	insert_res = hashtable_insert(&ctx->shards[shard_id], model, hash, FNV);
 
 	res = pthread_rwlock_unlock(&ctx->locks[shard_id]);
 	assert(res == 0);
 
-	return res;
+	return insert_res;
 }
 
 int counting_models(struct counting_ctx *ctx, char* buffer, uint32_t remaining_buffer_len) {
