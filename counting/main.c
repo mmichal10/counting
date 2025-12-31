@@ -13,8 +13,8 @@
 struct tree_owner trees[SHARDS] = {};
 
 struct pthread_ctx {
-	uint32_t start_pos;
-	uint32_t end_pos;
+	uint64_t start_pos;
+	uint64_t end_pos;
 	int file_descryptor;
 	int shard_id;
 };
@@ -22,15 +22,15 @@ struct pthread_ctx {
 #define MIN(__A, __B) (__A < __B ? __A : __B)
 
 #define READ_BATCH_SIZE 16384
-#define LOG_INTERVAL (READ_BATCH_SIZE * 256)
+#define LOG_INTERVAL (READ_BATCH_SIZE * 256UL)
 
 void *sharded_counting(void *param) {
 	struct pthread_ctx *ctx = param;
-	uint32_t file_position = 0;
+	uint64_t file_position = 0;
 	int read_bytes;
 	int read_size;
 	uint32_t arr[READ_BATCH_SIZE] = {};
-	uint32_t log_threshold = ctx->start_pos % LOG_INTERVAL;
+	uint64_t log_threshold = ctx->start_pos % LOG_INTERVAL;
 
 	printf("Worker %d: STARTED\n", ctx->shard_id);
 	file_position = ctx->start_pos;
@@ -40,6 +40,9 @@ void *sharded_counting(void *param) {
 
 		if (read_size < sizeof(arr))
 			memset(arr, 0, sizeof(arr));
+
+		assert(file_position >= ctx->start_pos);
+		assert(file_position + read_size <= ctx->end_pos);
 
 		read_bytes = pread(ctx->file_descryptor, arr, read_size, file_position);
 		if (read_bytes < 1)
@@ -66,8 +69,8 @@ int main(int argc, char *argv[]) {
 	int i;
 	int res;
 	char *inputfile_name = "random_numbers";
-	uint32_t file_size;
-	uint32_t file_chunk_size;
+	uint64_t file_size;
+	uint64_t file_chunk_size;
 
 	pthread_t threads[THREAD_COUNT] = {};
 	struct pthread_ctx *thread_params[THREAD_COUNT] = {};
@@ -78,7 +81,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	int fd = open(argv[1], O_RDONLY);
-	if (fd == 0) {
+	if (fd < 0) {
 		printf("Failed to open file\n");
 		return 1;
 	}
